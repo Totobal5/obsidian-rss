@@ -1,8 +1,9 @@
-import {setIcon, ItemView, WorkspaceLeaf} from "obsidian";
+import {setIcon, ItemView, WorkspaceLeaf, sanitizeHTMLToDom} from "obsidian";
 import RssReaderPlugin from "../main";
 import {VIEW_ID} from "../consts";
 import t from "../l10n/locale";
 import {ItemModal} from "../modals/ItemModal";
+import {Feed} from "../providers/Feed";
 
 export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
@@ -86,47 +87,95 @@ export default class ViewLoader extends ItemView {
         this.renderList(listPane, detailPane, allFeeds);
     }
 
-    private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: any[]) {
+    private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: Feed[]) {
         listPane.empty();
-        const items: any[] = [];
-        for (const feed of feeds) items.push(...feed.items());
-        if (!items.length) {
-            listPane.createDiv({cls: 'rss-fr-empty', text: t('all')}); // reuse translation
+        const collected: {feed: Feed, item: any}[] = [];
+        for (const feed of feeds) {
+            for (const it of feed.items()) collected.push({feed, item: it});
+        }
+        if (!collected.length) {
+            listPane.createDiv({cls: 'rss-fr-empty', text: 'No items'});
             return;
         }
-        items.sort((a,b)=> (b.pubDate()?.getTime?.()||0) - (a.pubDate()?.getTime?.()||0));
-        let group: string | null = null;
-        for (const item of items) {
-            const d = item.pubDate ? item.pubDate() : null;
-            const g = d ? d.toDateString() : 'Unknown';
-            if (g !== group) {
-                group = g;
-                listPane.createDiv({cls: 'rss-fr-group-header', text: g});
+        // Parse date strings -> Date objects (fallback to epoch 0 when invalid to keep stable sort)
+        collected.sort((a,b)=> {
+            const ad = new Date(a.item.pubDate?.() || a.item.pubDate || 0).getTime();
+            const bd = new Date(b.item.pubDate?.() || b.item.pubDate || 0).getTime();
+            return bd - ad;
+        });
+        let currentGroup: string | null = null;
+        for (const {feed, item} of collected) {
+            const dateStrRaw = (typeof item.pubDate === 'function') ? item.pubDate() : item.pubDate; // Item interface returns string
+            const dateObj = dateStrRaw ? new Date(dateStrRaw) : null;
+            const groupLabel = dateObj ? this.groupLabel(dateObj) : 'Unknown';
+            if (groupLabel !== currentGroup) {
+                currentGroup = groupLabel;
+                listPane.createDiv({cls: 'rss-fr-group-header', text: groupLabel});
             }
-            const row = listPane.createDiv({cls: 'rss-fr-row unread'});
-            row.createSpan({cls: 'rss-dot'});
-            row.createSpan({text: ''}); // star placeholder
-            row.createSpan({cls: 'rss-fr-feed', text: item.feed?.title?.() || item.feedTitle?.() || ''});
+            const row = listPane.createDiv({cls: 'rss-fr-row'});
+            if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
+            const dot = row.createSpan({cls: 'rss-dot'});
+            const starEl = row.createSpan({cls: 'rss-fr-star', text: item.starred && item.starred() ? '★' : '☆'});
+            starEl.onclick = (e) => {
+                e.stopPropagation();
+                if (item.markStarred) item.markStarred(!item.starred());
+                starEl.setText(item.starred() ? '★' : '☆');
+                starEl.toggleClass('is-starred', item.starred());
+            };
+            row.createSpan({cls: 'rss-fr-feed', text: feed.title()});
             row.createSpan({cls: 'rss-fr-title', text: item.title()});
-            row.createSpan({cls: 'rss-fr-date', text: d ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''});
+            const timeLabel = dateObj ? dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+            row.createSpan({cls: 'rss-fr-date', text: timeLabel});
+
             row.onclick = () => {
-                row.removeClass('unread');
-                row.addClass('read');
-                this.openDetail(detailPane, item, items);
+                if (item.markRead && !item.read()) {
+                    item.markRead(true);
+                    row.removeClass('unread');
+                    row.addClass('read');
+                    dot.addClass('read');
+                }
+                this.openDetail(detailPane, feed, item, collected.map(c=>c.item));
             };
         }
     }
 
-    private openDetail(detailPane: HTMLElement, item: any, items: any[]) {
+    private groupLabel(d: Date): string {
+        const now = new Date();
+        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffMs = startToday.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dayDiff = Math.round(diffMs / 86400000);
+    if (dayDiff === 0) return 'Today';
+    if (dayDiff === 1) return 'Yesterday';
+        return d.toLocaleDateString();
+    }
+
+    private openDetail(detailPane: HTMLElement, feed: Feed, item: any, items: any[]) {
         detailPane.empty();
         detailPane.removeClass('hidden');
         const toolbar = detailPane.createDiv({cls: 'rss-fr-toolbar'});
-        const openBtn = toolbar.createEl('button', {text: t('open')});
+    const openBtn = toolbar.createEl('button', {text: t('open')});
         openBtn.onclick = () => new ItemModal(this.plugin, item, items, true).open();
+    const unreadBtn = toolbar.createEl('button', {text: item.read && !item.read() ? t('mark_as_read') : t('mark_as_unread')});
+        unreadBtn.onclick = () => {
+            if (item.markRead) item.markRead(!item.read());
+            unreadBtn.setText(item.read() ? t('mark_as_unread') : t('mark_as_read'));
+        };
+        const starBtn = toolbar.createEl('button', {text: item.starred && item.starred() ? t('remove_from_favorites') : t('mark_as_favorite')});
+        starBtn.onclick = () => {
+            if (item.markStarred) item.markStarred(!item.starred());
+            starBtn.setText(item.starred() ? t('remove_from_favorites') : t('mark_as_favorite'));
+        };
         const titleEl = detailPane.createEl('h2');
         titleEl.setText(item.title());
-        const meta = detailPane.createDiv({text: item.pubDate ? item.pubDate().toString() : ''});
-        const body = detailPane.createDiv();
-        body.setText(item.description()?.replace(/\n+/g,' ').substring(0,1000) || '');
+        const meta = detailPane.createDiv({text: `${feed.title()} • ${(typeof item.pubDate === 'function') ? item.pubDate() : item.pubDate || ''}`});
+        const body = detailPane.createDiv({cls: 'rss-fr-body'});
+        try {
+            const raw = (item.body && item.body()) || (item.description && item.description()) || '';
+            // sanitized HTML (Obsidian helper)
+            const frag = sanitizeHTMLToDom(raw);
+            body.appendChild(frag);
+        } catch (e) {
+            body.setText(item.description?.() || '');
+        }
     }
 }
