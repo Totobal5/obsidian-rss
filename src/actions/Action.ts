@@ -60,6 +60,8 @@ export default class Action {
             const localProvider: any = await plugin.providers.getById('local');
             localProvider?.invalidateCache && localProvider.invalidateCache();
         } catch {}
+    // Notify open views to refresh unread counters
+    try { document.dispatchEvent(new CustomEvent('rss-reader-read-updated')); } catch {}
         return Promise.resolve();
     })));
 
