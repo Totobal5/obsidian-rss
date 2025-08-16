@@ -151,6 +151,17 @@ ul[style*="margin-left"] {
         font-size:13px;
     }
 }
+/* Panel narrow class (aplicado por ResizeObserver, independientemente de viewport) */
+.rss-fr-layout.rss-narrow { 
+    grid-template-columns: 1fr; 
+    grid-template-rows: auto 1fr; 
+    grid-template-areas: 'subs' 'list';
+}
+.rss-fr-layout.rss-narrow .rss-fr-subs { 
+    display:block; 
+    border-right:none; 
+    border-bottom:1px solid var(--background-modifier-border); 
+}
 
 .rss-fr-subs { grid-area: subs; border-right: 1px solid var(--background-modifier-border); overflow-y: auto; padding: 8px 8px 32px 8px; font-size: 12px; }
 .rss-fr-subs .rss-folder-header, .rss-fr-subs .rss-feed-header { padding:4px 6px; border-radius:4px; }

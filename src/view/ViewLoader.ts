@@ -8,6 +8,7 @@ import {Feed} from "../providers/Feed";
 export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
     private contentContainer: HTMLDivElement;
+    private resizeObserver?: ResizeObserver;
 
     constructor(leaf: WorkspaceLeaf, plugin: RssReaderPlugin) {
         super(leaf);
@@ -33,12 +34,30 @@ export default class ViewLoader extends ItemView {
         container.addClass('rss-view-container');
         this.contentContainer = container.createDiv({cls: 'rss-scrollable-content'});
 
+        // Resize observer para adaptar layout al ancho del panel (no solo viewport)
+        this.resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const width = entry.contentRect.width;
+                const root = this.contentContainer.querySelector('.rss-fr-layout') as HTMLElement;
+                if (!root) continue;
+                if (width < 720) root.addClass('rss-narrow'); else root.removeClass('rss-narrow');
+            }
+        });
+        this.resizeObserver.observe(this.contentContainer);
+
         // Acción de refrescar usando la barra de acciones estándar
         this.addAction('refresh-cw', t('refresh_feeds'), async () => {
             await this.displayData();
         });
 
         await this.displayData();
+    }
+
+    protected async onClose(): Promise<void> {
+        if (this.resizeObserver) {
+            try { this.resizeObserver.disconnect(); } catch(_) {}
+            this.resizeObserver = undefined;
+        }
     }
 
     private async displayData() {
