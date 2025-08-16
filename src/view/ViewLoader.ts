@@ -117,8 +117,8 @@ export default class ViewLoader extends ItemView {
         // Get all favorite items using consistent detection
         const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
             const feedFavorites = feed.items().filter((item: any) => {
-                // Use direct property access for consistency with main.ts filtering
-                return item.favorite === true;
+                // Use the starred() method since feed.items() returns Item wrappers
+                return item.starred && item.starred();
             });
             return favorites.concat(feedFavorites);
         }, []);

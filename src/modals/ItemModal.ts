@@ -152,20 +152,28 @@ export class ItemModal extends Modal {
         }
     }
 
+    private getFavoriteState(): boolean {
+        const rawItem = (this.item as any).item || this.item;
+        return rawItem.favorite || false;
+    }
+
     async markAsFavorite(): Promise<void> {
-        console.log(`🔍 ItemModal: Before favorite toggle - starred(): ${this.item.starred()}`);
+        // Access the raw item data directly
+        const rawItem = (this.item as any).item || this.item;
+        const wasFavorite = rawItem.favorite || false;
+        console.log(`🔍 ItemModal: Before favorite toggle - favorite: ${wasFavorite}`);
         
         // Use the FAVORITE action to handle the logic
         await Action.FAVORITE.processor(this.plugin, this.item);
         
-        const isStarred = this.item.starred();
-        console.log(`🔍 ItemModal: After favorite toggle - starred(): ${isStarred}`);
+        const isFavorite = this.getFavoriteState();
+        console.log(`🔍 ItemModal: After favorite toggle - favorite: ${isFavorite}`);
         
         // Update the button UI immediately
-        this.favoriteButton.setIcon(isStarred ? 'star-glyph' : 'star');
-        this.favoriteButton.setTooltip(isStarred ? t("remove_from_favorites") : t("mark_as_favorite"));
+        this.favoriteButton.setIcon(isFavorite ? 'star-glyph' : 'star');
+        this.favoriteButton.setTooltip(isFavorite ? t("remove_from_favorites") : t("mark_as_favorite"));
         
-        console.log(`🔍 ItemModal: Updated button - icon: ${isStarred ? 'star-glyph' : 'star'}`);
+        console.log(`🔍 ItemModal: Updated button - icon: ${isFavorite ? 'star-glyph' : 'star'}`);
         
         // Refresh the main view to update counters and lists
         await this.refreshMainView();
@@ -182,34 +190,6 @@ export class ItemModal extends Modal {
         }
     }
 
-    private async syncFavoriteState(): Promise<void> {
-        try {
-            // Obtener el estado actual desde el provider
-            const provider = this.plugin.providers.getCurrent();
-            const folders = await provider.folders();
-            
-            // Buscar el item actual en los datos persistidos
-            for (const folder of folders) {
-                for (const feed of folder.feeds()) {
-                    for (const savedItem of feed.items()) {
-                        // Comparar por título (ya que el ID puede ser undefined)
-                        if (savedItem.title() === this.item.title()) {
-                            // Sincronizar el estado de favorito
-                            const savedStarred = savedItem.starred && savedItem.starred();
-                            if (this.item.markStarred && savedStarred !== this.item.starred()) {
-                                console.log(`🔍 Syncing favorite state for "${this.item.title()}" from ${this.item.starred()} to ${savedStarred}`);
-                                this.item.markStarred(savedStarred);
-                            }
-                            return;
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('🔍 Error syncing favorite state:', error);
-        }
-    }
-
     async markAsRead(): Promise<void> {
         await Action.READ.processor(this.plugin, this.item);
         this.readButton.setIcon((this.item.read()) ? 'eye-off' : 'eye');
@@ -218,14 +198,14 @@ export class ItemModal extends Modal {
 
     async display(): Promise<void> {
         // Debug: Estado inicial del item al abrir modal
-        console.log(`🔍 Modal opening - item.starred(): ${this.item.starred()}`);
+        console.log(`🔍 Modal opening - item.favorite: ${this.getFavoriteState()}`);
         console.log(`🔍 Modal opening - item title: ${this.item.title()}`);
         console.log(`🔍 Modal opening - item.id(): ${this.item.id()}`);
         
         // REMOVED: syncFavoriteState() was causing unnecessary reloads
         // The item state should already be correct from the store
         
-        console.log(`🔍 Using current state - item.starred(): ${this.item.starred()}`);
+        console.log(`🔍 Using current state - item.favorite: ${this.getFavoriteState()}`);
         
         this.modalEl.addClass("rss-modal");
         const {contentEl} = this;
@@ -257,8 +237,8 @@ export class ItemModal extends Modal {
             this.readButton.buttonEl.addClass("rss-button");
 
             this.favoriteButton = new ButtonComponent(topButtons)
-                .setIcon(this.item.starred() ? 'star-glyph' : 'star')
-                .setTooltip(this.item.starred() ? t("remove_from_favorites") : t("mark_as_favorite"))
+                .setIcon(this.getFavoriteState() ? 'star-glyph' : 'star')
+                .setTooltip(this.getFavoriteState() ? t("remove_from_favorites") : t("mark_as_favorite"))
                 .onClick(async () => {
                     await this.markAsFavorite();
                 });

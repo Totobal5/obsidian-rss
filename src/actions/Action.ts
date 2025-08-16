@@ -53,15 +53,17 @@ export default class Action {
     })));
 
     static FAVORITE = new Action(t("mark_as_favorite_remove"), "star", ((async (plugin, item) : Promise<void> => {
-        const wasStarred = item.starred();
-        console.log(`🔍 FAVORITE Action - before: starred=${wasStarred}`);
+        // Access the raw item data directly - no more starred() nonsense
+        const rawItem = (item as any).item || item; // Get the underlying RssFeedItem
+        const wasFavorite = rawItem.favorite || false;
+        console.log(`🔍 FAVORITE Action - before: favorite=${wasFavorite}`);
         
-        // Toggle the favorite state
-        const newStarredState = !wasStarred;
-        item.markStarred(newStarredState);
+        // Toggle the favorite state DIRECTLY on the raw item
+        const newFavoriteState = !wasFavorite;
+        rawItem.favorite = newFavoriteState;
         
         // Show appropriate notice
-        if (newStarredState) {
+        if (newFavoriteState) {
             new Notice(t("added_to_favorites"));
             console.log(`🔍 FAVORITE Action - added to favorites`);
         } else {
@@ -69,7 +71,7 @@ export default class Action {
             console.log(`🔍 FAVORITE Action - removed from favorites`);
         }
         
-        console.log(`🔍 FAVORITE Action - after markStarred: starred=${item.starred()}`);
+        console.log(`🔍 FAVORITE Action - after setting favorite: favorite=${rawItem.favorite}`);
         
         // Save the changes using writeFeedContent to update the store properly
         await plugin.writeFeedContent((items: any[]) => {
