@@ -114,35 +114,30 @@ export default class ViewLoader extends ItemView {
         setIcon(starIcon, 'star');
         starIcon.style.marginRight = '8px';
         
-        // Get all favorite items using consistent detection
-        const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
-            const feedFavorites = feed.items().filter((item: any) => {
-                // Use the starred() method since feed.items() returns Item wrappers
-                return item.starred && item.starred();
-            });
-            return favorites.concat(feedFavorites);
-        }, []);
-        
-        console.log(`🔍 Found ${favoriteItems.length} favorite items across all feeds`);
-        
-        favoritesButton.createSpan({text: `Favorites (${favoriteItems.length})`});
+        // Count favorites directly from persisted settings (single source of truth)
+        const persistedFavoriteCount = (this.plugin.settings.items || []).reduce((acc, feed) => {
+            if (!feed || !Array.isArray(feed.items)) return acc;
+            return acc + feed.items.filter(it => it.favorite === true).length;
+        }, 0);
+        console.log(`🔍 Found ${persistedFavoriteCount} persisted favorite items`);
+        favoritesButton.createSpan({text: `Favorites (${persistedFavoriteCount})`});
         
         favoritesButton.onclick = () => {
             // Remover clase active de otros elementos
             subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
             favoritesButton.addClass('active');
             
-            // Recalcular favoritos dinámicamente cada vez que se hace click
-            const currentFavoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
-                const feedFavorites = feed.items().filter((item: any) => {
-                    return item.favorite === true;
-                });
-                return favorites.concat(feedFavorites);
-            }, []);
-            
-            console.log(`🔍 Favorites button clicked: Found ${currentFavoriteItems.length} current favorite items`);
-            
-            // Crear feed temporal para favoritos
+            // Recalcular favoritos siempre desde settings (evita wrappers desactualizados)
+            const currentFavoriteItems = [] as any[];
+            for (const feedContent of (this.plugin.settings.items || [])) {
+                if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                for (const raw of feedContent.items) {
+                    if (raw.favorite === true) currentFavoriteItems.push(raw);
+                }
+            }
+            console.log(`🔍 Favorites button clicked: Found ${currentFavoriteItems.length} current favorite raw items`);
+
+            // Crear feed temporal para favoritos (adaptar a interfaz mínima consumida por renderList)
             const favoritesFeed = {
                 id: () => -1,
                 url: () => '#favorites',
@@ -154,7 +149,38 @@ export default class ViewLoader extends ItemView {
                 link: () => '#favorites',
                 folderId: () => -1,
                 folderName: () => 'Special',
-                items: () => currentFavoriteItems
+                items: () => currentFavoriteItems.map(raw => ({
+                    // Implement required Item interface methods with safe fallbacks
+                    title: () => raw.title,
+                    pubDate: () => raw.pubDate,
+                    description: () => raw.description,
+                    body: () => raw.content,
+                    mediaThumbnail: () => raw.image,
+                    favorite: raw.favorite === true,
+                    read: () => raw.read === true,
+                    markRead: (v: boolean) => { raw.read = v; },
+                    tags: () => raw.tags || [],
+                    setTags: (tags: string[]) => { raw.tags = tags; },
+                    // Additional methods expected by Item interface (return neutral values)
+                    author: () => raw.creator || '',
+                    created: () => raw.created === true,
+                    enclosureLink: () => '',
+                    enclosureMime: () => '',
+                    feed: () => raw.feed || '',
+                    feedId: () => 0,
+                    folder: () => raw.folder || '',
+                    guid: () => raw.guid || raw.link || '',
+                    guidHash: () => raw.hash || '',
+                    highlights: (): string[] => [],
+                    id: () => raw.hash || raw.link || '',
+                    language: () => raw.language || '',
+                    markCreated: (v: boolean) => { raw.created = v; },
+                    rtl: () => false,
+                    starred: () => raw.favorite === true, // legacy
+                    markStarred: (v: boolean) => { raw.favorite = v; },
+                    url: () => raw.link,
+                    mediaDescription: () => raw.description || '',
+                }))
             };
             
             this.renderList(listPane, detailPane, [favoritesFeed]);

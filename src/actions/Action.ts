@@ -72,12 +72,39 @@ export default class Action {
         }
         
         console.log(`🔍 FAVORITE Action - after setting favorite: favorite=${rawItem.favorite}`);
-        
-        // Save the changes using writeFeedContent to update the store properly
-        await plugin.writeFeedContent((items: any[]) => {
-            console.log(`🔍 FAVORITE Action - saving ${items.length} items to storage`);
-            return items; // Return the same items array (the item is already modified)
+        // --- CRITICAL SYNC STEP ---
+        // Ensure the item inside plugin.settings.items is updated (don't rely on wrapper reference)
+        try {
+            let updated = false;
+            for (const feedContent of plugin.settings.items) {
+                if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                const match = feedContent.items.find((i: any) => i.link === rawItem.link);
+                if (match) {
+                    match.favorite = rawItem.favorite === true; // normalize to boolean
+                    updated = true;
+                    break;
+                }
+            }
+            if (!updated) {
+                console.warn('⚠️ FAVORITE Action - item not found in settings by link, cannot persist favorite state');
+            }
+        } catch (err) {
+            console.error('❌ FAVORITE Action - failed syncing favorite state into settings:', err);
+        }
+
+        // Persist settings (writeFeedContent just re-saves current array without rebuilding objects)
+        await plugin.writeFeedContent((current: any[]) => {
+            console.log(`🔍 FAVORITE Action - saving ${current.length} feeds to storage (favorites synced by link)`);
+            return current; // array already mutated in place
         });
+
+        // Invalidate provider cache so new favorite state is visible immediately in views
+        try {
+            const localProvider: any = await plugin.providers.getById('local');
+            if (localProvider?.invalidateCache) localProvider.invalidateCache();
+        } catch(e) {
+            console.debug('Cache invalidation skipped:', e);
+        }
         
         console.log(`🔍 FAVORITE Action - completed successfully`);
         return Promise.resolve();
