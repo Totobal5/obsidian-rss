@@ -12,6 +12,9 @@ import {getFeedItems} from "../../parser/rssParser";
 
 export class LocalFeedProvider implements FeedProvider {
     private readonly plugin: RssReaderPlugin;
+    private feedsCache: Feed[] | null = null;
+    private cacheTimestamp: number = 0;
+    private readonly CACHE_DURATION = 30000; // 30 segundos
 
     constructor(plugin: RssReaderPlugin) {
         this.plugin = plugin;
@@ -30,6 +33,15 @@ export class LocalFeedProvider implements FeedProvider {
     }
 
     async feeds(): Promise<Feed[]> {
+        const now = Date.now();
+        
+        // Usar cache si está disponible y es reciente
+        if (this.feedsCache && (now - this.cacheTimestamp) < this.CACHE_DURATION) {
+            console.log(`📦 Using cached feeds (age: ${((now - this.cacheTimestamp) / 1000).toFixed(1)}s)`);
+            return this.feedsCache;
+        }
+
+        const cacheStart = performance.now();
         const result: Feed[] = [];
         const feeds = this.plugin.settings.feeds;
         for (const feed of feeds) {
@@ -37,6 +49,11 @@ export class LocalFeedProvider implements FeedProvider {
             result.push(new LocalFeed(content, feed.name));
         }
 
+        // Actualizar cache
+        this.feedsCache = result;
+        this.cacheTimestamp = now;
+        console.log(`🔄 Feeds cached in ${(performance.now() - cacheStart).toFixed(2)}ms`);
+        
         return result;
     }
 
@@ -78,6 +95,13 @@ export class LocalFeedProvider implements FeedProvider {
 
     warnings(): string[] {
         return [];
+    }
+
+    // Método para invalidar el cache cuando se actualicen los feeds
+    invalidateCache(): void {
+        console.log("🗑️  Feed cache invalidated");
+        this.feedsCache = null;
+        this.cacheTimestamp = 0;
     }
 
     settings(containerEl: HTMLDivElement): SettingsSection {

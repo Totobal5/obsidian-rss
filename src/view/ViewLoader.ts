@@ -70,7 +70,15 @@ export default class ViewLoader extends ItemView {
 
         const providerStart = performance.now();
         const provider = this.plugin.providers.getCurrent();
-        const folders = await provider.folders();
+        
+        // Si ya tenemos feeds cacheados, usarlos directamente para las carpetas
+        let folders: any[] = [];
+        try {
+            folders = await provider.folders();
+        } catch (error) {
+            console.error("❌ Error loading folders:", error);
+            folders = [];
+        }
         console.log(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
 
         // Agregar botón "All Feeds" al principio

@@ -372,6 +372,12 @@ export default class RssReaderPlugin extends Plugin {
         await this.writeFeedContent(() => result);
         console.log(`💾 Feed content saved in ${(performance.now() - saveStart).toFixed(2)}ms`);
         
+        // Invalidar cache del provider para que folders() use datos frescos
+        const localProvider = await this.providers.getById('local') as LocalFeedProvider;
+        if (localProvider && localProvider.invalidateCache) {
+            localProvider.invalidateCache();
+        }
+        
         console.log(`✅ Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
     }
 
