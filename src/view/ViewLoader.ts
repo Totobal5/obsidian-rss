@@ -47,8 +47,9 @@ export default class ViewLoader extends ItemView {
         root.addClass('rss-fr-layout');
 
         const subsPane = root.createDiv({cls: 'rss-fr-subs'});
-        const listPane = root.createDiv({cls: 'rss-fr-list'});
-        const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
+    const listPane = root.createDiv({cls: 'rss-fr-list'});
+    // Detail pane not used for now, kept for future optional preview
+    const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
 
         const provider = this.plugin.providers.getCurrent();
         const folders = await provider.folders();
@@ -112,7 +113,7 @@ export default class ViewLoader extends ItemView {
                 currentGroup = groupLabel;
                 listPane.createDiv({cls: 'rss-fr-group-header', text: groupLabel});
             }
-            const row = listPane.createDiv({cls: 'rss-fr-row'});
+            const row = listPane.createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
             const starEl = row.createSpan({cls: 'rss-fr-star', text: item.starred && item.starred() ? '★' : '☆'});
@@ -122,10 +123,35 @@ export default class ViewLoader extends ItemView {
                 starEl.setText(item.starred() ? '★' : '☆');
                 starEl.toggleClass('is-starred', item.starred());
             };
-            row.createSpan({cls: 'rss-fr-feed', text: feed.title()});
-            row.createSpan({cls: 'rss-fr-title', text: item.title()});
+            // Thumbnail
+            let thumbUrl = '';
+            try { thumbUrl = (item.mediaThumbnail && item.mediaThumbnail()) || ''; } catch(_) {}
+            if (!thumbUrl) {
+                // fallback: search <img src> in description/body
+                try {
+                    const raw = (item.description && item.description()) || (item.body && item.body()) || '';
+                    const m = raw.match(/<img[^>]+src="([^"]+)"/i);
+                    if (m) thumbUrl = m[1];
+                } catch(_) {}
+            }
+            if (thumbUrl) {
+                const img = row.createEl('img', {cls: 'rss-fr-thumb', attr: {src: thumbUrl}});
+                img.loading = 'lazy';
+            } else {
+                row.createSpan({cls: 'rss-fr-thumb-placeholder'});
+            }
+            const main = row.createDiv({cls: 'rss-fr-main'});
+            const topLine = main.createDiv({cls: 'rss-fr-top'});
+            topLine.createSpan({cls: 'rss-fr-feed', text: feed.title()});
+            topLine.createSpan({cls: 'rss-fr-title', text: item.title()});
             const timeLabel = dateObj ? dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-            row.createSpan({cls: 'rss-fr-date', text: timeLabel});
+            topLine.createSpan({cls: 'rss-fr-date', text: timeLabel});
+            const descLine = main.createDiv({cls: 'rss-fr-desc'});
+            // strip HTML tags
+            let descRaw = '';
+            try { descRaw = (item.description && item.description()) || (item.body && item.body()) || ''; } catch(_) {}
+            const text = descRaw.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+            descLine.setText(text.slice(0, 220));
 
             row.onclick = () => {
                 if (item.markRead && !item.read()) {
@@ -134,7 +160,7 @@ export default class ViewLoader extends ItemView {
                     row.addClass('read');
                     dot.addClass('read');
                 }
-                this.openDetail(detailPane, feed, item, collected.map(c=>c.item));
+                new ItemModal(this.plugin, item, collected.map(c=>c.item), true).open();
             };
         }
     }
@@ -149,33 +175,5 @@ export default class ViewLoader extends ItemView {
         return d.toLocaleDateString();
     }
 
-    private openDetail(detailPane: HTMLElement, feed: Feed, item: any, items: any[]) {
-        detailPane.empty();
-        detailPane.removeClass('hidden');
-        const toolbar = detailPane.createDiv({cls: 'rss-fr-toolbar'});
-    const openBtn = toolbar.createEl('button', {text: t('open')});
-        openBtn.onclick = () => new ItemModal(this.plugin, item, items, true).open();
-    const unreadBtn = toolbar.createEl('button', {text: item.read && !item.read() ? t('mark_as_read') : t('mark_as_unread')});
-        unreadBtn.onclick = () => {
-            if (item.markRead) item.markRead(!item.read());
-            unreadBtn.setText(item.read() ? t('mark_as_unread') : t('mark_as_read'));
-        };
-        const starBtn = toolbar.createEl('button', {text: item.starred && item.starred() ? t('remove_from_favorites') : t('mark_as_favorite')});
-        starBtn.onclick = () => {
-            if (item.markStarred) item.markStarred(!item.starred());
-            starBtn.setText(item.starred() ? t('remove_from_favorites') : t('mark_as_favorite'));
-        };
-        const titleEl = detailPane.createEl('h2');
-        titleEl.setText(item.title());
-        const meta = detailPane.createDiv({text: `${feed.title()} • ${(typeof item.pubDate === 'function') ? item.pubDate() : item.pubDate || ''}`});
-        const body = detailPane.createDiv({cls: 'rss-fr-body'});
-        try {
-            const raw = (item.body && item.body()) || (item.description && item.description()) || '';
-            // sanitized HTML (Obsidian helper)
-            const frag = sanitizeHTMLToDom(raw);
-            body.appendChild(frag);
-        } catch (e) {
-            body.setText(item.description?.() || '');
-        }
-    }
+    // openDetail no longer used (modal preferred)
 }
