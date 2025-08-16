@@ -426,15 +426,42 @@ export default class ViewLoader extends ItemView {
             const text = descRaw.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
             descLine.setText(this.truncateWords(text, 220));
 
-            row.onclick = () => {
-                if (item.markRead && !item.read()) {
-                    item.markRead(true);
-                    row.removeClass('unread');
-                    row.addClass('read');
-                    dot.addClass('read');
-                    // Save read state
-                    this.plugin.writeFeedContent((items: any[]) => items);
-                }
+            row.onclick = async () => {
+                const raw = (item as any).item || item;
+                let mutated = false;
+                try {
+                    if (!raw.read) {
+                        raw.read = true;
+                        if (item.markRead) item.markRead(true);
+                        row.removeClass('unread');
+                        row.addClass('read');
+                        dot.addClass('read');
+                        mutated = true;
+                    }
+                    if (raw.visited !== true) {
+                        raw.visited = true;
+                        row.addClass('visited');
+                        mutated = true;
+                    }
+                    if (mutated) {
+                        // Sync inside settings by link
+                        outer: for (const feedContent of this.plugin.settings.items) {
+                            if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                            for (const i of feedContent.items) {
+                                if (i.link === raw.link) {
+                                    if (raw.read) i.read = true;
+                                    if (raw.visited) i.visited = true;
+                                    break outer;
+                                }
+                            }
+                        }
+                        await this.plugin.writeFeedContent(arr => arr);
+                        try {
+                            const localProvider: any = await this.plugin.providers.getById('local');
+                            localProvider?.invalidateCache && localProvider.invalidateCache();
+                        } catch {}
+                    }
+                } catch(e) { console.warn('Read/visited sync failed', e); }
                 new ItemModal(this.plugin, item, collected.map(c=>c.item), true).open();
             };
         }

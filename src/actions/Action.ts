@@ -40,15 +40,26 @@ export default class Action {
     })));
 
     static READ = new Action(t("mark_as_read_unread"), "eye", ((async (plugin, item) : Promise<void> => {
-        if (item.read()) {
-            item.markRead(false);
-            new Notice(t("marked_as_unread"));
-        } else {
-            item.markRead(true);
-            new Notice(t("marked_as_read"));
-        }
-        // Guardar cambios en settings
-        await plugin.saveSettings();
+        const rawItem = (item as any).item || item;
+        const newState = !rawItem.read;
+        rawItem.read = newState;
+        if (item.markRead) item.markRead(newState);
+        new Notice(newState ? t("marked_as_read") : t("marked_as_unread"));
+
+        // Sync inside settings by link
+        try {
+            for (const feedContent of plugin.settings.items) {
+                if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                const match = feedContent.items.find((i: any) => i.link === rawItem.link);
+                if (match) { match.read = newState; break; }
+            }
+        } catch (e) { console.warn('READ sync warn', e); }
+
+        await plugin.writeFeedContent(arr => arr);
+        try {
+            const localProvider: any = await plugin.providers.getById('local');
+            localProvider?.invalidateCache && localProvider.invalidateCache();
+        } catch {}
         return Promise.resolve();
     })));
 

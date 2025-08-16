@@ -40,6 +40,7 @@ export interface RssFeedItem {
     favorite: boolean,
     read: boolean,
     created: boolean,
+    visited: boolean,
     tags: string[],
     hash: string,
     id: string,
@@ -168,6 +169,7 @@ function buildItem(element: Element): RssFeedItem {
         read: null,
         favorite: null,
         created: null,
+    visited: null,
         tags: [],
         hash: null,
         highlights: []
@@ -232,6 +234,7 @@ export async function getFeedItems(feed: RssFeed): Promise<RssFeedContent> {
             item.read = false;
             item.favorite = false;
             item.created = false;
+            item.visited = false;
             item.language = language;
             item.hash = <string>new Md5().appendStr(item.title).appendStr(item.folder).appendStr(item.link).end();
 
