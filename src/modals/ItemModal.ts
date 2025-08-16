@@ -25,10 +25,10 @@ export class ItemModal extends Modal {
 
     constructor(plugin: RssReaderPlugin, item: Item, items: Item[], save = true) {
         super(plugin.app);
-        this.plugin = plugin;
-        this.items = items;
-        this.item = item;
-        this.save = save;
+    this.plugin = plugin;
+    this.items = items ?? [];
+    this.item = item;
+    this.save = save;
 
 
         if (this.save) {
@@ -116,26 +116,28 @@ export class ItemModal extends Modal {
     }
 
     previous(): void {
-        let index = this.items.findIndex((item) => {
-            return item === this.item;
-        });
+        if (!this.items || this.items.length === 0) return;
+        let index = this.items.findIndex((item) => item === this.item);
         index++;
-        const item = this.items[index];
-        if (item !== undefined) {
-            this.close();
-            new ItemModal(this.plugin, item, this.items, this.save).open();
+        if (index >= 0 && index < this.items.length) {
+            const item = this.items[index];
+            if (item !== undefined) {
+                this.close();
+                new ItemModal(this.plugin, item, this.items, this.save).open();
+            }
         }
     }
 
     next(): void {
-        let index = this.items.findIndex((item) => {
-            return item === this.item;
-        });
+        if (!this.items || this.items.length === 0) return;
+        let index = this.items.findIndex((item) => item === this.item);
         index--;
-        const item = this.items[index];
-        if (item !== undefined) {
-            this.close();
-            new ItemModal(this.plugin, item, this.items, this.save).open();
+        if (index >= 0 && index < this.items.length) {
+            const item = this.items[index];
+            if (item !== undefined) {
+                this.close();
+                new ItemModal(this.plugin, item, this.items, this.save).open();
+            }
         }
     }
 

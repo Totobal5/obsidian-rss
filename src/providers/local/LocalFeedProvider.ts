@@ -68,7 +68,12 @@ export class LocalFeedProvider implements FeedProvider {
     }
 
     async items(): Promise<Item[]> {
-        return [];
+        const result: Item[] = [];
+        const feeds = await this.feeds();
+        for (const feed of feeds) {
+            result.push(...feed.items());
+        }
+        return result;
     }
 
     warnings(): string[] {

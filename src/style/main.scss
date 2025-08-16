@@ -2,6 +2,127 @@
     color: darkslategrey;
 }
 
+/* ESTILOS COMPLETAMENTE RESPONSIVOS PARA RSS ITEMS */
+.rss-item-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    display: grid !important;
+}
+
+.rss-item-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.rss-item-text {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+    hyphens: auto !important;
+    box-sizing: border-box !important;
+}
+
+.rss-item-title {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    box-sizing: border-box !important;
+}
+
+.rss-item-description {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* CONTENEDORES DE LISTAS RESPONSIVOS */
+ul[style*="margin-left"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 32px !important;
+    padding-right: 32px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.rss-card-items .rss-item-text {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+/* Contenedor principal para aprovechar el alto/scroll nativo */
+.rss-view-container, .rss-scrollable-content {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+    padding: 0 8px 16px 8px !important;
+}
+
+/* Ajustes de separación de listas */
+.rss-view-container ul {
+    margin: 0 0 12px 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+    width: 100% !important;
+}
+
+/* Items con grid adaptable a presencia de imagen */
+.rss-item-container {
+    grid-template-columns: 1fr !important; /* fallback */
+}
+.rss-item-container:has(img.rss-thumbnail) {
+    grid-template-columns: 60px 1fr !important;
+}
+
+/* Hover accesible */
+.rss-item-container:hover {
+    background: var(--background-modifier-hover) !important;
+}
+
+/* Media queries para pantallas estrechas */
+@media (max-width: 900px) {
+    .rss-item-title { font-size: 13px !important; }
+    .rss-item-description { font-size: 11px !important; }
+    .rss-item-container { gap: 10px !important; }
+}
+@media (max-width: 700px) {
+    .rss-item-container:has(img.rss-thumbnail) { grid-template-columns: 48px 1fr !important; }
+    .rss-item-container img.rss-thumbnail { width: 48px !important; height: 48px !important; }
+}
+@media (max-width: 520px) {
+    /* Forzar modo una sola columna: imagen arriba */
+    .rss-item-container:has(img.rss-thumbnail) { grid-template-columns: 1fr !important; }
+    .rss-item-container img.rss-thumbnail { width: 100% !important; height: auto !important; aspect-ratio: 16/9; object-fit: cover !important; }
+}
+@media (max-width: 400px) {
+    .rss-item-title { font-size: 12px !important; }
+    .rss-item-description { font-size: 11px !important; }
+    .rss-view-container { padding: 0 4px 12px 4px !important; }
+}
+
+/* Soporte para usuarios que prefieren menos animaciones */
+@media (prefers-reduced-motion: reduce) {
+    .rss-item-container { transition: none !important; }
+}
+/* FIN ESTILOS RESPONSIVOS */
+
 .has-invalid-message {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -76,14 +76,25 @@ export class LocalFeedItem implements Item {
     }
 
     mediaDescription(): string {
-        return "";
+        return this.item.description || "";
     }
 
     mediaThumbnail(): string {
+        // Priorizar el campo image del item
+        if (this.item.image && this.item.image.length > 0) {
+            return this.item.image;
+        }
+        
+        // Si no hay imagen, buscar en el contenido HTML
+        if (this.item.content) {
+            const imgMatch = this.item.content.match(/<img[^>]+src="([^"]+)"/);
+            if (imgMatch) {
+                return imgMatch[1];
+            }
+        }
+        
         return "";
-    }
-
-    pubDate(): string {
+    }    pubDate(): string {
         return this.item.pubDate;
     }
 
@@ -103,7 +114,7 @@ export class LocalFeedItem implements Item {
     }
 
     tags(): string[] {
-        return [];
+    return this.item.tags || [];
     }
 
     title(): string {

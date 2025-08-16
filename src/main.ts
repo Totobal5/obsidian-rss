@@ -97,6 +97,29 @@ export default class RssReaderPlugin extends Plugin {
             }
         });
 
+        // Comando para abrir el RSS reader en la pestaña principal
+        this.addCommand({
+            id: "open-rss-main-tab",
+            name: "Abrir RSS Reader en pestaña principal",
+            callback: () => {
+                this.activateRSSView();
+            }
+        });
+
+        // Comando adicional para abrir en nueva pestaña
+        this.addCommand({
+            id: "open-rss-new-tab",
+            name: "Abrir RSS Reader en nueva pestaña",
+            callback: () => {
+                const leaf = this.app.workspace.getLeaf("tab");
+                leaf.setViewState({
+                    type: VIEW_ID,
+                    active: true
+                });
+                this.app.workspace.revealLeaf(leaf);
+            }
+        });
+
         this.registerView(VIEW_ID, (leaf: WorkspaceLeaf) => new ViewLoader(leaf, this));
 
         this.addSettingTab(new RSSReaderSettingsTab(this.app, this));
@@ -342,6 +365,24 @@ export default class RssReaderPlugin extends Plugin {
         await this.app.workspace.getRightLeaf(false).setViewState({
             type: VIEW_ID,
         });
+    }
+
+    async activateRSSView(): Promise<void> {
+        // Buscar si ya existe una vista RSS abierta
+        const existing = this.app.workspace.getLeavesOfType(VIEW_ID);
+        
+        if (existing.length > 0) {
+            // Si existe, activarla
+            this.app.workspace.revealLeaf(existing[0]);
+        } else {
+            // Si no existe, crear una nueva en la pestaña actual o nueva
+            const leaf = this.app.workspace.getLeaf(false);
+            await leaf.setViewState({
+                type: VIEW_ID,
+                active: true
+            });
+            this.app.workspace.revealLeaf(leaf);
+        }
     }
 
     async migrateData(): Promise<void> {
