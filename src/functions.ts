@@ -214,6 +214,12 @@ export function rssToMd(plugin: RssReaderPlugin, content: string): string {
 
     let markdown = htmlToMarkdown(content);
 
+    // Mejorar parsing de blockquotes
+    markdown = improveBlockquoteParsing(markdown, content);
+    
+    // Mejorar manejo de imágenes standalone para centrarlas
+    markdown = centerStandaloneImages(markdown);
+
     //If dataview is installed
     if ((plugin.app as any).plugins.plugins["dataview"]) {
         //wrap dataview inline code
@@ -251,6 +257,53 @@ export function rssToMd(plugin: RssReaderPlugin, content: string): string {
         markdown = markdown.replace(/!?\[(.*)\]\(.+\)/gm, "$1");
     }
     return markdown;
+}
+
+function improveBlockquoteParsing(markdown: string, originalHtml: string): string {
+    // Si el HTML original contiene blockquotes, asegurar que se conviertan correctamente
+    const blockquoteRegex = /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi;
+    const matches = originalHtml.match(blockquoteRegex);
+    
+    if (matches) {
+        for (const match of matches) {
+            // Extraer el contenido del blockquote
+            const content = match.replace(/<blockquote[^>]*>/, '').replace(/<\/blockquote>/, '');
+            // Limpiar HTML interno y convertir a texto
+            const cleanContent = content.replace(/<[^>]+>/g, '').trim();
+            
+            if (cleanContent) {
+                // Crear blockquote markdown proper
+                const blockquoteMarkdown = cleanContent
+                    .split('\n')
+                    .map(line => line.trim() ? `> ${line.trim()}` : '>')
+                    .join('\n');
+                
+                // Si no existe ya un blockquote similar en el markdown, agregarlo
+                if (!markdown.includes(blockquoteMarkdown.substring(0, 50))) {
+                    markdown += '\n\n' + blockquoteMarkdown + '\n';
+                }
+            }
+        }
+    }
+    
+    return markdown;
+}
+
+function centerStandaloneImages(markdown: string): string {
+    // Centrar imágenes que están solas en su línea (no tienen texto cerca)
+    // Pattern: línea vacía + imagen + línea vacía
+    const standaloneImagePattern = /(\n\s*\n)\s*(!?\[[^\]]*\]\([^)]+\))\s*(\n\s*\n)/g;
+    
+    return markdown.replace(standaloneImagePattern, (match, before, image, after) => {
+        // Solo centrar si la imagen no tiene texto descriptivo largo
+        const altText = image.match(/!\[([^\]]*)\]/);
+        const hasDetailedAlt = altText && altText[1] && altText[1].length > 50;
+        
+        if (!hasDetailedAlt) {
+            return `${before}<div align="center">\n\n${image}\n\n</div>${after}`;
+        }
+        return match;
+    });
 }
 
 function escapeRegExp(string: string) {

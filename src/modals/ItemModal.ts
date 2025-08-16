@@ -312,6 +312,9 @@ export class ItemModal extends Modal {
 
             await MarkdownRenderer.renderMarkdown(markdown, content, "", this.plugin);
 
+            // Mejorar embeds de YouTube en el contenido
+            await this.embedYouTubeLinks(content);
+            
             // Crear embeds sociales después del renderizado
             await this.embedSocialLinks(content);
             
@@ -474,6 +477,66 @@ export class ItemModal extends Modal {
         });
     }
 
+    private async embedYouTubeLinks(contentEl: HTMLElement): Promise<void> {
+        // Patrones para detectar links de YouTube
+        const youtubePatterns = [
+            /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/g,
+            /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/g
+        ];
+
+        // Buscar todos los links de YouTube
+        const allLinks = contentEl.querySelectorAll('a[href*="youtube.com"], a[href*="youtu.be"]');
+        
+        for (const link of Array.from(allLinks)) {
+            const href = (link as HTMLAnchorElement).href;
+            let videoId = '';
+            
+            // Extraer video ID usando los patrones
+            for (const pattern of youtubePatterns) {
+                const match = href.match(pattern);
+                if (match && match[1]) {
+                    videoId = match[1];
+                    break;
+                }
+            }
+            
+            if (videoId) {
+                // Verificar que no existe ya un embed para este video
+                if (link.nextElementSibling?.classList.contains('youtube-embed')) {
+                    continue;
+                }
+
+                // Crear el iframe embed
+                const embedContainer = link.ownerDocument.createElement('div');
+                embedContainer.className = 'youtube-embed';
+                embedContainer.style.cssText = `
+                    margin: 20px auto;
+                    text-align: center;
+                    max-width: 100%;
+                `;
+
+                const iframe = link.ownerDocument.createElement('iframe');
+                iframe.style.cssText = `
+                    width: 100%;
+                    max-width: 560px;
+                    height: 315px;
+                    border: none;
+                    border-radius: 8px;
+                `;
+                iframe.setAttribute('src', `https://www.youtube.com/embed/${videoId}?rel=0`);
+                iframe.setAttribute('allowfullscreen', 'true');
+                iframe.setAttribute('frameborder', '0');
+
+                embedContainer.appendChild(iframe);
+                
+                // Insertar después del link
+                if (link.parentNode) {
+                    link.parentNode.insertBefore(embedContainer, link.nextSibling);
+                }
+            }
+        }
+    }
+
     private async embedSocialLinks(contentEl: HTMLElement): Promise<void> {
         // Definir patrones para todas las redes sociales
         const twitterOEmbedFn = (url: string) => `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&theme=dark&dnt=true&omit_script=true`;
@@ -560,17 +623,19 @@ export class ItemModal extends Modal {
                 return;
             }
 
-            // Crear el container del embed
+            // Crear el container del embed centrado
             const embedContainer = linkElement.ownerDocument.createElement('div');
             embedContainer.className = `social-embed ${platformName.toLowerCase().replace(/[^a-z]/g, '-')}-embed`;
             embedContainer.style.cssText = `
-                margin: 16px 0;
+                margin: 20px auto;
                 padding: 16px;
                 border: 1px solid var(--background-modifier-border);
                 border-radius: 12px;
                 background: var(--background-secondary);
                 max-width: 550px;
                 position: relative;
+                display: block;
+                text-align: center;
             `;
 
             // Intentar obtener contenido rico via oEmbed (solo para plataformas que lo soporten)
