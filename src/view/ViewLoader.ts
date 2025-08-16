@@ -155,6 +155,10 @@ export default class ViewLoader extends ItemView {
                 const img = row.createEl('img', {cls: 'rss-fr-thumb', attr: {src: thumbUrl}});
                 img.loading = 'lazy';
                 hasThumb = true;
+                row.addClass('has-thumbnail');
+            } else {
+                // Añadir clase específica cuando no hay imagen
+                row.addClass('no-thumbnail');
             }
             const main = row.createDiv({cls: 'rss-fr-main' + (hasThumb ? '' : ' no-thumb')});
             const topLine = main.createDiv({cls: 'rss-fr-top'});

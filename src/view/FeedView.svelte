@@ -93,7 +93,7 @@
                 <span>
                     {feed.title()}
                     {#if (feed.favicon())}
-                        <img src={feed.favicon()} alt={feed.title} style="height: 1em;"/>
+                        <img src={feed.favicon()} alt={feed.title()} style="height: 1em;"/>
                     {/if}
                 </span>
             </div>
