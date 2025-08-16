@@ -41,211 +41,92 @@ export default class ViewLoader extends ItemView {
     }
 
     private async displayData() {
-        const contentEl = this.contentContainer;
-        contentEl.empty();
-        
-        // Configurar el contenedor principal para ser completamente responsivo
-        contentEl.style.cssText = `
-            width: 100% !important;
-            max-width: 100% !important;
-            overflow-x: hidden !important;
-            box-sizing: border-box !important;
-        `;
+        const root = this.contentContainer;
+        root.empty();
+        root.addClass('rss-fr-layout');
 
-        const folders = await this.plugin.providers.getCurrent().folders();
+        const subsPane = root.createDiv({cls: 'rss-fr-subs'});
+        const listPane = root.createDiv({cls: 'rss-fr-list'});
+        const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
+
+        const provider = this.plugin.providers.getCurrent();
+        const folders = await provider.folders();
 
         for (const folder of folders) {
-            const folderDiv = this.contentContainer.createDiv('rss-folder');
-            
-            // Header del folder con collapse
-            const folderHeader = folderDiv.createDiv('rss-folder-header');
-            folderHeader.style.display = 'flex';
-            folderHeader.style.alignItems = 'center';
-            folderHeader.style.cursor = 'pointer';
-            folderHeader.style.padding = '4px 0';
-
-            const folderCollapseIcon = folderHeader.createSpan();
-            setIcon(folderCollapseIcon, 'down-triangle');
-            folderCollapseIcon.style.marginRight = '4px';
-            
+            const folderHeader = subsPane.createDiv({cls: 'rss-folder-header'});
+            const triangle = folderHeader.createSpan();
+            setIcon(triangle, 'down-triangle');
+            triangle.style.marginRight = '4px';
             folderHeader.createSpan({text: folder.name()});
-
-            const folderContent = folderDiv.createDiv('rss-folder-content');
-            folderContent.style.display = 'block';
-            let folderCollapsed = false;
-
-            // Click handler para el folder
-            folderHeader.addEventListener('click', (e) => {
-                e.stopPropagation();
-                folderCollapsed = !folderCollapsed;
-                if (folderCollapsed) {
-                    setIcon(folderCollapseIcon, 'right-triangle');
-                    folderContent.style.display = 'none';
-                } else {
-                    setIcon(folderCollapseIcon, 'down-triangle');
-                    folderContent.style.display = 'block';
-                }
-            });
-
+            const feedsWrap = subsPane.createDiv();
+            let collapsed = false;
+            folderHeader.onclick = () => {
+                collapsed = !collapsed;
+                setIcon(triangle, collapsed ? 'right-triangle' : 'down-triangle');
+                feedsWrap.style.display = collapsed ? 'none' : 'block';
+            };
             for (const feed of folder.feeds()) {
-                const feedDiv = folderContent.createDiv('feed');
-                
-                // Header del feed con collapse
-                const feedHeader = feedDiv.createDiv('rss-feed-header');
+                const feedHeader = feedsWrap.createDiv({cls: 'rss-feed-header'});
                 feedHeader.style.display = 'flex';
                 feedHeader.style.alignItems = 'center';
-                feedHeader.style.cursor = 'pointer';
-                feedHeader.style.padding = '4px 0';
-                feedHeader.style.marginLeft = '16px';
-
-                const feedCollapse = feedHeader.createSpan();
-                setIcon(feedCollapse, 'right-triangle');
-                feedCollapse.style.marginRight = '4px';
-
-                if(feed.favicon()) {
-                    const favicon = feedHeader.createEl('img', {cls: 'feed-favicon', attr: {src: feed.favicon()}});
-                    favicon.style.width = '16px';
-                    favicon.style.height = '16px';
-                    favicon.style.marginRight = '4px';
+                if (feed.favicon()) {
+                    const fav = feedHeader.createEl('img', {attr: {src: feed.favicon()}});
+                    fav.style.width = '14px';
+                    fav.style.height = '14px';
+                    fav.style.marginRight = '4px';
                 }
                 feedHeader.createSpan({text: feed.title()});
-
-                // Contenedor de items
-                const feedList = feedDiv.createEl('ul');
-                feedList.style.cssText = `
-                    margin-left: 32px !important;
-                    padding: 0 !important;
-                    padding-right: 32px !important;
-                    list-style: none !important;
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    box-sizing: border-box !important;
-                    overflow: hidden !important;
-                `;
-                let feedCollapsedState = false;
-
-                // Click handler para el feed
-                feedHeader.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    feedCollapsedState = !feedCollapsedState;
-                    if (feedCollapsedState) {
-                        setIcon(feedCollapse, 'right-triangle');
-                        feedList.style.display = 'none';
-                    } else {
-                        setIcon(feedCollapse, 'down-triangle');
-                        feedList.style.display = 'block';
-                    }
-                });
-
-                // Inicializar como expandido
-                setIcon(feedCollapse, 'down-triangle');
-
-                for (const item of feed.items()) {
-                    const itemDiv = feedList.createEl('li');
-                    itemDiv.addClass('rss-item-container');
-                    
-                    // USAR CSS GRID - más robusto que flexbox para este caso
-                    const hasImage = item.mediaThumbnail() && item.mediaThumbnail().length > 0 && !item.mediaThumbnail().includes('.mp3');
-                    itemDiv.style.cssText = `
-                        padding: 8px !important;
-                        margin-bottom: 8px !important;
-                        border: 1px solid var(--background-modifier-border) !important;
-                        border-radius: 6px !important;
-                        cursor: pointer !important;
-                        width: 100% !important;
-                        box-sizing: border-box !important;
-                        display: grid !important;
-                        grid-template-columns: ${hasImage ? '60px 1fr' : '1fr'} !important;
-                        gap: 12px !important;
-                        align-items: start !important;
-                    `;
-
-                    // Imagen (si existe)
-                    if (hasImage) {
-                        const img = itemDiv.createEl('img', {
-                            attr: {src: item.mediaThumbnail(), alt: 'Article'},
-                            cls: 'rss-thumbnail'
-                        });
-                        img.style.cssText = `
-                            width: 60px !important;
-                            height: 60px !important;
-                            object-fit: cover !important;
-                            border-radius: 4px !important;
-                        `;
-                    }
-
-                    // Contenido de texto
-                    const textContent = itemDiv.createDiv({cls: 'rss-item-text'});
-                    textContent.style.cssText = `
-                        overflow: hidden !important;
-                        word-wrap: break-word !important;
-                        min-width: 0 !important;
-                    `;
-
-                    // Título
-                    const titleDiv = textContent.createDiv({
-                        text: item.title(),
-                        cls: 'rss-item-title'
-                    });
-                    titleDiv.style.cssText = `
-                        font-weight: bold !important;
-                        margin-bottom: 4px !important;
-                        line-height: 1.3 !important;
-                        font-size: 14px !important;
-                        word-break: break-word !important;
-                        hyphens: auto !important;
-                    `;
-
-                    // Descripción
-                    if (item.description() && item.description().length > 0) {
-                        const descDiv = textContent.createDiv({cls: 'rss-item-description'});
-                        const cleanDesc = item.description().replace(/<[^>]*>/g, '').trim();
-                        const truncatedDesc = cleanDesc.length > 120 ? cleanDesc.substring(0, 120) + '...' : cleanDesc;
-                        descDiv.textContent = truncatedDesc;
-                        descDiv.style.cssText = `
-                            font-size: 12px !important;
-                            color: var(--text-muted) !important;
-                            line-height: 1.4 !important;
-                            margin-top: 4px !important;
-                            word-break: break-word !important;
-                            hyphens: auto !important;
-                        `;
-                    }
-
-                    // Iconos de estado
-                    if(item.starred() || item.created()) {
-                        const statusIcons = textContent.createDiv({cls: 'rss-status-icons'});
-                        statusIcons.style.cssText = `
-                            display: flex !important;
-                            gap: 4px !important;
-                            margin-top: 8px !important;
-                        `;
-                        
-                        if(item.starred())
-                            setIcon(statusIcons.createSpan(), 'star');
-                        if(item.created())
-                            setIcon(statusIcons.createSpan(), 'document');
-                    }
-
-                    if(item.read())
-                        itemDiv.addClass('rss-read');
-
-                    // Click para abrir modal
-                    itemDiv.onClickEvent((e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        new ItemModal(this.plugin, item, feed.items(), true).open();
-                    });
-
-                    // Hover effect
-                    itemDiv.addEventListener('mouseenter', () => {
-                        itemDiv.style.backgroundColor = 'var(--background-modifier-hover)';
-                    });
-                    itemDiv.addEventListener('mouseleave', () => {
-                        itemDiv.style.backgroundColor = '';
-                    });
-                }
+                feedHeader.onclick = () => this.renderList(listPane, detailPane, [feed]);
             }
         }
+
+        // All feeds initial
+        const allFeeds: any[] = [];
+        for (const f of folders) allFeeds.push(...f.feeds());
+        this.renderList(listPane, detailPane, allFeeds);
+    }
+
+    private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: any[]) {
+        listPane.empty();
+        const items: any[] = [];
+        for (const feed of feeds) items.push(...feed.items());
+        if (!items.length) {
+            listPane.createDiv({cls: 'rss-fr-empty', text: t('all')}); // reuse translation
+            return;
+        }
+        items.sort((a,b)=> (b.pubDate()?.getTime?.()||0) - (a.pubDate()?.getTime?.()||0));
+        let group: string | null = null;
+        for (const item of items) {
+            const d = item.pubDate ? item.pubDate() : null;
+            const g = d ? d.toDateString() : 'Unknown';
+            if (g !== group) {
+                group = g;
+                listPane.createDiv({cls: 'rss-fr-group-header', text: g});
+            }
+            const row = listPane.createDiv({cls: 'rss-fr-row unread'});
+            row.createSpan({cls: 'rss-dot'});
+            row.createSpan({text: ''}); // star placeholder
+            row.createSpan({cls: 'rss-fr-feed', text: item.feed?.title?.() || item.feedTitle?.() || ''});
+            row.createSpan({cls: 'rss-fr-title', text: item.title()});
+            row.createSpan({cls: 'rss-fr-date', text: d ? d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''});
+            row.onclick = () => {
+                row.removeClass('unread');
+                row.addClass('read');
+                this.openDetail(detailPane, item, items);
+            };
+        }
+    }
+
+    private openDetail(detailPane: HTMLElement, item: any, items: any[]) {
+        detailPane.empty();
+        detailPane.removeClass('hidden');
+        const toolbar = detailPane.createDiv({cls: 'rss-fr-toolbar'});
+        const openBtn = toolbar.createEl('button', {text: t('open')});
+        openBtn.onclick = () => new ItemModal(this.plugin, item, items, true).open();
+        const titleEl = detailPane.createEl('h2');
+        titleEl.setText(item.title());
+        const meta = detailPane.createDiv({text: item.pubDate ? item.pubDate().toString() : ''});
+        const body = detailPane.createDiv();
+        body.setText(item.description()?.replace(/\n+/g,' ').substring(0,1000) || '');
     }
 }
