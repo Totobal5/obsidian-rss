@@ -338,12 +338,13 @@ export default class ViewLoader extends ItemView {
                 // Use the FAVORITE action for consistent behavior
                 await Action.FAVORITE.processor(this.plugin, item);
                 
-                // Update the UI immediately by checking the updated state
+                // CRITICAL FIX: Access updated favorite state directly 
+                // The LocalFeedItem now has a favorite getter that reads the raw item
                 const isStarred = item.favorite === true;
                 starEl.setText(isStarred ? '★' : '☆');
                 starEl.toggleClass('is-starred', isStarred);
                 
-                console.log(`🔍 ViewLoader: Updated star UI, new favorite state: ${isStarred}`);
+                console.log(`🔍 ViewLoader: Updated star UI, new favorite state: ${isStarred} (refreshed)`);
                 
                 // Update favorites counter and refresh view if needed
                 await this.updateFavoritesCounter();

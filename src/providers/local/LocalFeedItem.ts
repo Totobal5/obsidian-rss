@@ -116,6 +116,11 @@ export class LocalFeedItem implements Item {
         return this.item.favorite || false;
     }
 
+    // Add favorite property getter for direct access
+    get favorite(): boolean {
+        return this.item.favorite || false;
+    }
+
     tags(): string[] {
     return this.item.tags || [];
     }
