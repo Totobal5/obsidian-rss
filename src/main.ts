@@ -418,7 +418,7 @@ export default class RssReaderPlugin extends Plugin {
     async migrateData(): Promise<void> {
         const configPath = this.app.vault.configDir + "/plugins/rss-reader/data.json";
         const config = JSON.parse(await this.app.vault.adapter.read(configPath));
-
+        
         for(const feed of config.feeds) {
             if(feed.folder === undefined) {
                 feed.folder = "";
