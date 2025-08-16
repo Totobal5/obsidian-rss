@@ -230,13 +230,19 @@ export class ItemModal extends Modal {
         nextButton.buttonEl.addClass("rss-button");
 
         contentEl.createEl('h1', {cls: ["rss-title", "rss-selectable"], text: this.item.title()});
-        // short description excerpt under title
+        // description under title (even if also appears later)
         try {
             const rawDesc = (this.item.description && this.item.description()) || '';
-            const textDesc = rawDesc.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+            const textDesc = rawDesc
+                .replace(/<script[\s\S]*?<\/script>/gi,'')
+                .replace(/<style[\s\S]*?<\/style>/gi,'')
+                .replace(/<[^>]+>/g,' ')
+                .replace(/\s+/g,' ')
+                .trim();
             if (textDesc) {
-                const excerpt = this.truncateWords(textDesc, 260);
-                contentEl.createEl('p', {cls: ['rss-excerpt','rss-selectable'], text: excerpt});
+                const excerpt = this.truncateWords(textDesc, 300);
+                const p = contentEl.createEl('p', {cls: ['rss-excerpt','rss-selectable']});
+                p.innerHTML = this.linkify(excerpt);
             }
         } catch(_) {}
 
@@ -284,7 +290,9 @@ export class ItemModal extends Modal {
 
         if (this.item.body()) {
             //prepend empty yaml to fix rendering errors
-            const markdown = "---\n---" + rssToMd(this.plugin, this.item.body());
+            // Linkify twitter/plain URLs inside body beforehand
+            const processedBody = this.linkify(this.item.body());
+            const markdown = "---\n---" + rssToMd(this.plugin, processedBody);
 
             await MarkdownRenderer.renderMarkdown(markdown, content, "", this.plugin);
 
@@ -414,6 +422,15 @@ export class ItemModal extends Modal {
         const lastSpace = slice.lastIndexOf(' ');
         if (lastSpace > 40) slice = slice.slice(0, lastSpace);
         return slice.trimEnd() + '…';
+    }
+
+    private linkify(text: string): string {
+        // Simple URL to anchor conversion, highlight twitter
+        return text.replace(/https?:\/\/[\w.-]+(?:\/[\w\-._~:/?#@!$&'()*+,;=%]*)?/gi, (url) => {
+            const safe = url.replace(/"/g,'&quot;');
+            const cls = url.includes('twitter.com') || url.includes('t.co') ? 'rss-link twitter' : 'rss-link';
+            return `<a href="${safe}" target="_blank" rel="noopener" class="${cls}">${url}</a>`;
+        });
     }
 
     removeDanglingElements(el: HTMLElement) : void {

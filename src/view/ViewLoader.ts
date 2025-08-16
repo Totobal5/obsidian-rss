@@ -202,9 +202,10 @@ export default class ViewLoader extends ItemView {
 
     private truncateWords(text: string, maxChars: number): string {
         if (text.length <= maxChars) return text;
-        let slice = text.slice(0, maxChars - 1);
-        const lastSpace = slice.lastIndexOf(' ');
-        if (lastSpace > 40) slice = slice.slice(0, lastSpace); // avoid cutting very early
-        return slice.trimEnd() + '…';
+        // Cut slightly over then roll back to nearest space
+        let slice = text.slice(0, maxChars + 8);
+        const space = slice.lastIndexOf(' ');
+        if (space > 0) slice = slice.slice(0, space);
+        return slice.replace(/[\s\.,;:!-]*$/,'') + '…';
     }
 }

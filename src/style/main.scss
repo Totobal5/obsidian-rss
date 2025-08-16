@@ -266,6 +266,10 @@ ul[style*="margin-left"] {
 
 /* FIN ESTILOS RESPONSIVOS */
 
+.rss-excerpt { font-size: 14px; line-height:1.4; color: var(--text-muted); margin-top:4px; margin-bottom:12px; }
+a.rss-link.twitter { color: var(--text-accent); }
+a.rss-link.twitter:hover { text-decoration: underline; }
+
 .has-invalid-message {
     display: grid;
     grid-template-columns: 1fr 1fr;
