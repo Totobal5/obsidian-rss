@@ -9,6 +9,7 @@ export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
     private contentContainer: HTMLDivElement;
     private resizeObserver?: ResizeObserver;
+    private layoutRoot?: HTMLDivElement;
 
     constructor(leaf: WorkspaceLeaf, plugin: RssReaderPlugin) {
         super(leaf);
@@ -35,15 +36,8 @@ export default class ViewLoader extends ItemView {
         this.contentContainer = container.createDiv({cls: 'rss-scrollable-content'});
 
         // Resize observer para adaptar layout al ancho del panel (no solo viewport)
-        this.resizeObserver = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                const width = entry.contentRect.width;
-                const root = this.contentContainer.querySelector('.rss-fr-layout') as HTMLElement;
-                if (!root) continue;
-                if (width < 720) root.addClass('rss-narrow'); else root.removeClass('rss-narrow');
-            }
-        });
-        this.resizeObserver.observe(this.contentContainer);
+    this.resizeObserver = new ResizeObserver(() => this.applyResponsiveClass());
+    this.resizeObserver.observe(this.contentContainer);
 
         // Acción de refrescar usando la barra de acciones estándar
         this.addAction('refresh-cw', t('refresh_feeds'), async () => {
@@ -61,11 +55,12 @@ export default class ViewLoader extends ItemView {
     }
 
     private async displayData() {
-        const root = this.contentContainer;
-        root.empty();
-        root.addClass('rss-fr-layout');
+    this.contentContainer.empty();
+    // crear layout root separado para que querySelector funcione y evitar mezclar clases
+    this.layoutRoot = this.contentContainer.createDiv({cls: 'rss-fr-layout'});
+    const root = this.layoutRoot;
 
-        const subsPane = root.createDiv({cls: 'rss-fr-subs'});
+    const subsPane = root.createDiv({cls: 'rss-fr-subs'});
     const listPane = root.createDiv({cls: 'rss-fr-list'});
     // Detail pane not used for now, kept for future optional preview
     const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
@@ -105,6 +100,8 @@ export default class ViewLoader extends ItemView {
         const allFeeds: any[] = [];
         for (const f of folders) allFeeds.push(...f.feeds());
         this.renderList(listPane, detailPane, allFeeds);
+    // aplicar clase responsive inmediatamente
+    this.applyResponsiveClass();
     }
 
     private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: Feed[]) {
@@ -195,4 +192,11 @@ export default class ViewLoader extends ItemView {
     }
 
     // openDetail no longer used (modal preferred)
+
+    private applyResponsiveClass() {
+        const root = this.layoutRoot;
+        if (!root) return;
+        const width = this.contentContainer.getBoundingClientRect().width;
+        if (width < 720) root.addClass('rss-narrow'); else root.removeClass('rss-narrow');
+    }
 }
