@@ -934,6 +934,79 @@ img.feed-favicon {
     background-color: var(--background-modifier-error);
 }
 
+/* Botón de favoritos */
+.rss-favorites-button {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 12px !important;
+    margin: 4px 0 !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    background: transparent !important;
+    color: var(--text-normal) !important;
+    font-weight: 500 !important;
+}
+
+.rss-favorites-button:hover {
+    background: var(--background-modifier-hover) !important;
+    color: var(--text-accent) !important;
+}
+
+.rss-favorites-button.active {
+    background: var(--background-modifier-active-hover) !important;
+    color: var(--text-accent) !important;
+    font-weight: 600 !important;
+}
+
+/* Contadores de entradas */
+.rss-item-count-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 20px !important;
+    height: 20px !important;
+    padding: 2px 6px !important;
+    background: var(--text-accent) !important;
+    color: var(--text-on-accent) !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    margin-left: 8px !important;
+}
+
+/* Ajustar headers de carpetas para contadores */
+.rss-folder-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+/* Mejorar el espaciado de feeds con contadores */
+.rss-feed-header {
+    position: relative !important;
+}
+
+.rss-feed-header .rss-item-count-badge {
+    opacity: 0.8 !important;
+    transition: opacity 0.2s ease !important;
+}
+
+.rss-feed-header:hover .rss-item-count-badge {
+    opacity: 1 !important;
+}
+
+/* Contadores en modo responsive */
+@media (max-width: 600px) {
+    .rss-item-count-badge {
+        min-width: 18px !important;
+        height: 18px !important;
+        font-size: 10px !important;
+        margin-left: 6px !important;
+    }
+}
+
 .feed ul{
     margin-block-start: 0;
 }

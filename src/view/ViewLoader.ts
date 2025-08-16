@@ -86,11 +86,15 @@ export default class ViewLoader extends ItemView {
         const globeIcon = allFeedsButton.createSpan();
         setIcon(globeIcon, 'globe');
         globeIcon.style.marginRight = '8px';
-        allFeedsButton.createSpan({text: 'All Feeds'});
         
-        // All feeds initial - obtener todos los feeds para el botón global
+        // All feeds inicial - obtener todos los feeds para el botón global
         const globalFeedsList: any[] = [];
         for (const f of folders) globalFeedsList.push(...f.feeds());
+        
+        // Contar total de entradas en todos los feeds
+        const totalAllItems = globalFeedsList.reduce((total, feed) => total + (feed.items()?.length || 0), 0);
+        
+        allFeedsButton.createSpan({text: `All Feeds (${totalAllItems})`});
         
         allFeedsButton.onclick = () => {
             // Remover clase active de otros elementos
@@ -99,12 +103,55 @@ export default class ViewLoader extends ItemView {
             this.renderList(listPane, detailPane, globalFeedsList);
         };
 
+        // Agregar categoría de Favoritos
+        const favoritesButton = subsPane.createDiv({cls: 'rss-favorites-button'});
+        const starIcon = favoritesButton.createSpan();
+        setIcon(starIcon, 'star');
+        starIcon.style.marginRight = '8px';
+        
+        // Obtener todos los items favoritos
+        const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
+            const feedFavorites = feed.items().filter((item: any) => item.starred && item.starred());
+            return favorites.concat(feedFavorites);
+        }, []);
+        
+        favoritesButton.createSpan({text: `Favorites (${favoriteItems.length})`});
+        
+        favoritesButton.onclick = () => {
+            // Remover clase active de otros elementos
+            subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
+            favoritesButton.addClass('active');
+            
+            // Crear feed temporal para favoritos
+            const favoritesFeed = {
+                id: () => -1,
+                url: () => '#favorites',
+                title: () => 'Favorites',
+                name: () => 'Favorites',
+                favicon: () => null as string | null,
+                unreadCount: () => favoriteItems.length,
+                ordering: () => 0,
+                link: () => '#favorites',
+                folderId: () => -1,
+                folderName: () => 'Special',
+                items: () => favoriteItems
+            };
+            
+            this.renderList(listPane, detailPane, [favoritesFeed]);
+        };
+
         for (const folder of folders) {
             const folderHeader = subsPane.createDiv({cls: 'rss-folder-header'});
             const triangle = folderHeader.createSpan();
             setIcon(triangle, 'down-triangle');
             triangle.style.marginRight = '4px';
-            folderHeader.createSpan({text: folder.name()});
+            
+            // Contar entradas totales en esta carpeta
+            const folderItemCount = folder.feeds().reduce((total: number, feed: any) => total + (feed.items()?.length || 0), 0);
+            
+            const folderName = folderHeader.createSpan({text: `${folder.name()} (${folderItemCount})`});
+            folderName.style.flex = '1';
+            
             const feedsWrap = subsPane.createDiv();
             let collapsed = false;
             folderHeader.onclick = () => {
@@ -124,13 +171,30 @@ export default class ViewLoader extends ItemView {
                 const feedHeader = feedsWrap.createDiv({cls: 'rss-feed-header'});
                 feedHeader.style.display = 'flex';
                 feedHeader.style.alignItems = 'center';
+                feedHeader.style.justifyContent = 'space-between';
+                
+                const feedInfo = feedHeader.createDiv();
+                feedInfo.style.display = 'flex';
+                feedInfo.style.alignItems = 'center';
+                feedInfo.style.flex = '1';
+                
                 if (feed.favicon()) {
-                    const fav = feedHeader.createEl('img', {attr: {src: feed.favicon()}});
+                    const fav = feedInfo.createEl('img', {attr: {src: feed.favicon()}});
                     fav.style.width = '14px';
                     fav.style.height = '14px';
-                    fav.style.marginRight = '4px';
+                    fav.style.marginRight = '6px';
                 }
-                feedHeader.createSpan({text: feed.name()});
+                
+                const feedName = feedInfo.createSpan({text: feed.name()});
+                feedName.style.flex = '1';
+                
+                // Contador de entradas para este feed
+                const feedItemCount = feed.items()?.length || 0;
+                const countBadge = feedHeader.createSpan({
+                    text: feedItemCount.toString(),
+                    cls: 'rss-item-count-badge'
+                });
+                
                 feedHeader.onclick = () => {
                     // Remover clase active de otros elementos
                     subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
