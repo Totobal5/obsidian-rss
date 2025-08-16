@@ -256,41 +256,7 @@ export default class ViewLoader extends ItemView {
         this.applyResponsiveClass();
 
         // Listener para refrescar contadores de no leídos
-        const refreshSidebarCounts = () => {
-            try {
-                // Recompute global
-                const allUnread = globalFeedsList.reduce((total, feed:any) => total + (feed.items()?.filter((i:any)=> !i.read || !i.read())?.length || 0), 0);
-                const span = allFeedsButton.querySelector('span:last-child');
-                if (span) span.textContent = `All Feeds (${allUnread})`;
-                // Folders
-                const folderHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-folder-header')) as HTMLElement[];
-                for (const header of folderHeaders) {
-                    const textNode = header.querySelector('span:nth-child(2)');
-                    if (!textNode) continue;
-                    const folderName = textNode.textContent?.replace(/ \(.*\)$/,'');
-                    const folder = folders.find(f=> f.name() === folderName);
-                    if (!folder) continue;
-                    const count = folder.feeds().reduce((t:number, feed:any)=> t + (feed.items()?.filter((i:any)=> !i.read || !i.read())?.length || 0), 0);
-                    textNode.textContent = `${folderName} (${count})`;
-                }
-                // Feed badges
-                const feedHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-feed-header')) as HTMLElement[];
-                for (const fh of feedHeaders) {
-                    const nameEl = fh.querySelector('div span');
-                    const badge = fh.querySelector('.rss-item-count-badge');
-                    if (!nameEl || !badge) continue;
-                    const feedName = nameEl.textContent;
-                    let feedObj:any = null;
-                    for (const folder of folders) {
-                        feedObj = folder.feeds().find((f:any)=> f.name() === feedName) || feedObj;
-                    }
-                    if (!feedObj) continue;
-                    const c = feedObj.items()?.filter((i:any)=> !i.read || !i.read())?.length || 0;
-                    badge.textContent = String(c);
-                }
-            } catch(err) { console.debug('Sidebar count refresh failed', err); }
-        };
-        document.addEventListener('rss-reader-read-updated', refreshSidebarCounts, {once:false});
+    document.addEventListener('rss-reader-read-updated', () => this.refreshSidebarCounts(), {once:false});
         
         console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
@@ -477,6 +443,7 @@ export default class ViewLoader extends ItemView {
                     row.toggleClass('unread', !nowRead);
                     row.toggleClass('read', nowRead);
                     dot.toggleClass('read', nowRead);
+            console.log(`🟢 Dot toggle: ${nowRead ? 'read' : 'unread'} -> ${raw.title}`);
                     // Sync settings
                     outer: for (const feedContent of this.plugin.settings.items) {
                         if (!feedContent || !Array.isArray(feedContent.items)) continue;
@@ -484,9 +451,10 @@ export default class ViewLoader extends ItemView {
                             if (i.link === raw.link) { i.read = nowRead; break outer; }
                         }
                     }
-                    await this.plugin.writeFeedContent(arr => arr);
+            await this.plugin.writeFeedContent(arr => arr);
                     try { const localProvider: any = await this.plugin.providers.getById('local'); localProvider?.invalidateCache && localProvider.invalidateCache(); } catch {}
                     refreshCounters();
+                    this.refreshSidebarCounts();
                 } catch(err) { console.warn('Toggle read failed', err); }
             };
 
@@ -514,17 +482,55 @@ export default class ViewLoader extends ItemView {
                                 }
                             }
                         }
-                        await this.plugin.writeFeedContent(arr => arr);
+            await this.plugin.writeFeedContent(arr => arr);
                         try {
                             const localProvider: any = await this.plugin.providers.getById('local');
                             localProvider?.invalidateCache && localProvider.invalidateCache();
                         } catch {}
                     }
                 } catch(e) { console.warn('Read/visited sync failed', e); }
+        console.log('📖 Row click marked read for', raw.title);
                 refreshCounters();
+                this.refreshSidebarCounts();
                 new ItemModal(this.plugin, item, collected.map(c=>c.item), true).open();
             };
         }
+    }
+
+    private refreshSidebarCounts() {
+        try {
+            const settingsFeeds = this.plugin.settings.items || [];
+            // Global unread
+            const allUnread = settingsFeeds.reduce((acc: number, fc: any) => acc + (Array.isArray(fc.items) ? fc.items.filter((i:any)=> i.read !== true).length : 0), 0);
+            const allBtn = this.contentContainer.querySelector('.rss-all-feeds-button');
+            const span = allBtn?.querySelector('span:last-child');
+            if (span) span.textContent = `All Feeds (${allUnread})`;
+
+            // Folder headers
+            const folderHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-folder-header')) as HTMLElement[];
+            for (const header of folderHeaders) {
+                const textNode = header.querySelector('span:nth-child(2)');
+                if (!textNode) continue;
+                const folderName = textNode.textContent?.replace(/ \(.*\)$/,'');
+                const unreadInFolder = settingsFeeds.filter((fc:any)=> fc.folder === folderName)
+                    .reduce((acc:number, fc:any)=> acc + fc.items.filter((i:any)=> i.read !== true).length, 0);
+                textNode.textContent = `${folderName} (${unreadInFolder})`;
+            }
+
+            // Feed badges
+            const feedHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-feed-header')) as HTMLElement[];
+            for (const fh of feedHeaders) {
+                const nameEl = fh.querySelector('div span');
+                const badge = fh.querySelector('.rss-item-count-badge');
+                if (!nameEl || !badge) continue;
+                const feedName = nameEl.textContent;
+                const unreadInFeed = settingsFeeds.filter((fc:any)=> fc.name === feedName)
+                    .reduce((acc:number, fc:any)=> acc + fc.items.filter((i:any)=> i.read !== true).length, 0);
+                badge.textContent = String(unreadInFeed);
+            }
+            // Optional console (can be silenced later)
+            console.log('🔄 Sidebar unread counters refreshed');
+        } catch(err) { console.debug('Sidebar count refresh failed', err); }
     }
 
     private groupLabel(d: Date): string {
