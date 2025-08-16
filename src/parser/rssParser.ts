@@ -122,7 +122,7 @@ function getContent(element: Element | Document, names: string[]): string {
                 if (data.nodeName === elementName) {
                     //@ts-ignore
                     const tmp = data.getAttribute(attr);
-                    if (tmp.length > 0) {
+                    if (tmp && tmp.length > 0) {
                         value = tmp;
                     }
                 }
