@@ -256,7 +256,39 @@ export default class ViewLoader extends ItemView {
         this.applyResponsiveClass();
 
         // Listener para refrescar contadores de no leídos
-    document.addEventListener('rss-reader-read-updated', () => this.refreshSidebarCounts(), {once:false});
+        document.addEventListener('rss-reader-read-updated', () => this.refreshSidebarCounts(), {once:false});
+        // Listener para actualizar estrellas cuando se cambian en el modal
+        document.addEventListener('rss-reader-favorite-updated', (ev: any) => {
+            const link = ev?.detail?.link;
+            const fav = ev?.detail?.favorite;
+            if (!link) return;
+            // Buscar estrellas asociadas a ese link
+            const starEls = this.containerEl.querySelectorAll(`.rss-fr-star[data-link="${CSS.escape(link)}"]`);
+            starEls.forEach(star => {
+                star.textContent = fav ? '★' : '☆';
+                star.classList.toggle('is-starred', !!fav);
+            });
+            // Actualizar contador de favoritos
+            this.updateFavoritesCounter();
+        }, {once:false});
+        // Listener para aplicar estado de lectura sobre filas desde el modal
+        document.addEventListener('rss-reader-item-read-updated', (ev: any) => {
+            const link = ev?.detail?.link;
+            const read = ev?.detail?.read;
+            if (!link) return;
+            let selectorLink = link;
+            try { selectorLink = CSS.escape(link); } catch {}
+            const row = this.containerEl.querySelector(`.rss-fr-row-article[data-link="${selectorLink}"]`) as HTMLElement;
+            if (row) {
+                row.toggleClass('read', !!read);
+                row.toggleClass('unread', !read);
+                const dot = row.querySelector('.rss-dot');
+                if (dot) {
+                    if (read) dot.classList.add('read'); else dot.classList.remove('read');
+                }
+            }
+            this.refreshSidebarCounts();
+        }, {once:false});
         
         console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
@@ -357,10 +389,13 @@ export default class ViewLoader extends ItemView {
             const row = listPane.createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
+            // Guardar link para sincronizar desde modal
+            try { (row as any).dataset.link = (item.url ? item.url() : item.link) || ''; } catch {}
             
             // Create star button for favorites
             const isCurrentlyStarred = item.favorite === true;
             const starEl = row.createSpan({cls: 'rss-fr-star', text: isCurrentlyStarred ? '★' : '☆'});
+            try { (starEl as any).dataset.link = (item.url ? item.url() : item.link) || ''; } catch {}
             if (isCurrentlyStarred) {
                 starEl.addClass('is-starred');
             }
@@ -412,8 +447,10 @@ export default class ViewLoader extends ItemView {
                 row.addClass('no-thumbnail');
             }
             const main = row.createDiv({cls: 'rss-fr-main' + (hasThumb ? '' : ' no-thumb')});
+            // Nueva fila para el nombre/"sección" del feed
+            const feedLine = main.createDiv({cls: 'rss-fr-feedline'});
+            feedLine.createSpan({cls: 'rss-fr-feed', text: feed.name()});
             const topLine = main.createDiv({cls: 'rss-fr-top'});
-            topLine.createSpan({cls: 'rss-fr-feed', text: feed.name()});
             topLine.createSpan({cls: 'rss-fr-title', text: item.title()});
             const timeLabel = dateObj ? dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
             topLine.createSpan({cls: 'rss-fr-date', text: timeLabel});

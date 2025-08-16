@@ -101,7 +101,8 @@ export class LocalFeedItem implements Item {
     }
 
     read(): boolean {
-        return false;
+    // Return actual persisted read state
+    return !!this.item.read;
     }
 
     rtl(): boolean {

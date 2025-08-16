@@ -124,6 +124,34 @@ export default class RssReaderPlugin extends Plugin {
             }
         });
 
+        // Comando para regenerar todas las entradas (resetear items y volver a cargar)
+        this.addCommand({
+            id: 'rss-regenerate-items',
+            name: 'Regenerar todas las entradas (reset)',
+            callback: async () => {
+                try {
+                    console.log('🧨 Regenerating all feed items: clearing existing items and refetching...');
+                    new Notice('Regenerando entradas de RSS…');
+                    // 1. Vaciar items actuales
+                    await this.writeFeedContent(() => []);
+                    // 2. Invalidar cache del provider local (si existe)
+                    const localProvider = await this.providers.getById('local') as LocalFeedProvider;
+                    if (localProvider && localProvider.invalidateCache) {
+                        localProvider.invalidateCache();
+                    }
+                    // 3. Volver a cargar feeds desde cero
+                    await this.updateFeeds();
+                    // 4. Despachar evento para refrescar contadores en la UI
+                    window.dispatchEvent(new CustomEvent('rss-reader-read-updated'));
+                    new Notice('Entradas regeneradas');
+                    console.log('✅ Regeneración completada correctamente');
+                } catch (e) {
+                    console.error('❌ Error regenerating feed items', e);
+                    new Notice('Error al regenerar entradas (ver consola)');
+                }
+            }
+        });
+
         const commandsStart = performance.now();
         this.registerView(VIEW_ID, (leaf: WorkspaceLeaf) => new ViewLoader(leaf, this));
         this.addSettingTab(new RSSReaderSettingsTab(this.app, this));

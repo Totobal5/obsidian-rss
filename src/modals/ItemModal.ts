@@ -133,8 +133,11 @@ export class ItemModal extends Modal {
         if (index >= 0 && index < this.items.length) {
             const item = this.items[index];
             if (item !== undefined) {
-                this.close();
-                new ItemModal(this.plugin, item, this.items, this.save).open();
+                // Ensure the target item is marked read & persisted before opening
+                this.markItemReadAndPersist(item).then(() => {
+                    this.close();
+                    new ItemModal(this.plugin, item, this.items, this.save).open();
+                });
             }
         }
     }
@@ -146,10 +149,37 @@ export class ItemModal extends Modal {
         if (index >= 0 && index < this.items.length) {
             const item = this.items[index];
             if (item !== undefined) {
-                this.close();
-                new ItemModal(this.plugin, item, this.items, this.save).open();
+                this.markItemReadAndPersist(item).then(() => {
+                    this.close();
+                    new ItemModal(this.plugin, item, this.items, this.save).open();
+                });
             }
         }
+    }
+
+    /** Marca un item como leído si no lo está y persiste + evento para refrescar contadores */
+    private async markItemReadAndPersist(target: Item): Promise<void> {
+        try {
+            const raw = (target as any).item || target;
+            if (!raw.read) {
+                raw.read = true;
+                if (target.markRead) target.markRead(true);
+                // Sincronizar dentro de settings por link
+                outer: for (const feedContent of this.plugin.settings.items) {
+                    if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                    for (const i of feedContent.items) {
+                        if (i.link === raw.link) { i.read = true; break outer; }
+                    }
+                }
+                await this.plugin.writeFeedContent(arr => arr);
+                try {
+                    const localProvider: any = await this.plugin.providers.getById('local');
+                    localProvider?.invalidateCache && localProvider.invalidateCache();
+                } catch {}
+                try { document.dispatchEvent(new CustomEvent('rss-reader-read-updated')); } catch {}
+                try { document.dispatchEvent(new CustomEvent('rss-reader-item-read-updated', {detail:{link: raw.link, read: true}})); } catch {}
+            }
+        } catch (e) { console.warn('Failed to auto-mark read on navigation', e); }
     }
 
     private getFavoriteState(): boolean {
@@ -169,9 +199,15 @@ export class ItemModal extends Modal {
         const isFavorite = this.getFavoriteState();
         console.log(`🔍 ItemModal: After favorite toggle - favorite: ${isFavorite}`);
         
-        // Update the button UI immediately
-        this.favoriteButton.setIcon(isFavorite ? 'star-glyph' : 'star');
-        this.favoriteButton.setTooltip(isFavorite ? t("remove_from_favorites") : t("mark_as_favorite"));
+    // Update the button UI immediately (use same lucide 'star' icon; fill via CSS class)
+    this.favoriteButton.setIcon('star');
+    this.favoriteButton.setTooltip(isFavorite ? t("remove_from_favorites") : t("mark_as_favorite"));
+    this.favoriteButton.buttonEl.toggleClass('is-favorite', isFavorite);
+
+        // Emit global event so list view can update star instantly
+        try {
+            document.dispatchEvent(new CustomEvent('rss-reader-favorite-updated', {detail: {link: rawItem.link, favorite: isFavorite}}));
+        } catch(e) { console.debug('favorite event dispatch failed', e); }
         
         console.log(`🔍 ItemModal: Updated button - icon: ${isFavorite ? 'star-glyph' : 'star'}`);
         
@@ -192,8 +228,12 @@ export class ItemModal extends Modal {
 
     async markAsRead(): Promise<void> {
         await Action.READ.processor(this.plugin, this.item);
-        this.readButton.setIcon((this.item.read()) ? 'eye-off' : 'eye');
-        this.readButton.setTooltip((this.item.read()) ? t("mark_as_unread") : t("mark_as_unread"));
+    const rawItem = (this.item as any).item || this.item;
+    const isRead = !!rawItem.read;
+    this.readButton.setIcon(isRead ? 'eye-off' : 'eye');
+    this.readButton.setTooltip(isRead ? t("mark_as_unread") : t("mark_as_read"));
+    this.readButton.buttonEl.toggleClass('is-read', isRead);
+    try { document.dispatchEvent(new CustomEvent('rss-reader-item-read-updated', {detail:{link: rawItem.link, read: isRead}})); } catch {}
     }
 
     async display(): Promise<void> {
@@ -227,23 +267,28 @@ export class ItemModal extends Modal {
         let actions = Array.of(Action.CREATE_NOTE, Action.PASTE, Action.COPY, Action.OPEN);
 
         if (this.save) {
+            const rawItem = (this.item as any).item || this.item;
+            const initialRead = !!rawItem.read;
             this.readButton = new ButtonComponent(topButtons)
-                .setIcon(this.item.read ? 'eye-off' : 'eye')
-                .setTooltip(this.item.read ? t("mark_as_unread") : t("mark_as_read"))
+                .setIcon(initialRead ? 'eye-off' : 'eye')
+                .setTooltip(initialRead ? t("mark_as_unread") : t("mark_as_read"))
                 .onClick(async () => {
                     await this.markAsRead();
                 });
             this.readButton.buttonEl.setAttribute("tabindex", "-1");
             this.readButton.buttonEl.addClass("rss-button");
+            this.readButton.buttonEl.toggleClass('is-read', initialRead);
 
+            const initialFav = this.getFavoriteState();
             this.favoriteButton = new ButtonComponent(topButtons)
-                .setIcon(this.getFavoriteState() ? 'star-glyph' : 'star')
-                .setTooltip(this.getFavoriteState() ? t("remove_from_favorites") : t("mark_as_favorite"))
+                .setIcon('star')
+                .setTooltip(initialFav ? t("remove_from_favorites") : t("mark_as_favorite"))
                 .onClick(async () => {
                     await this.markAsFavorite();
                 });
             this.favoriteButton.buttonEl.setAttribute("tabindex", "-1");
             this.favoriteButton.buttonEl.addClass("rss-button");
+            this.favoriteButton.buttonEl.toggleClass('is-favorite', initialFav);
 
             actions = Array.of(Action.TAGS, ...actions);
         }
