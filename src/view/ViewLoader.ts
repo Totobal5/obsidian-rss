@@ -150,13 +150,13 @@ export default class ViewLoader extends ItemView {
                     if (m) thumbUrl = m[1];
                 } catch(_) {}
             }
+            let hasThumb = false;
             if (thumbUrl) {
                 const img = row.createEl('img', {cls: 'rss-fr-thumb', attr: {src: thumbUrl}});
                 img.loading = 'lazy';
-            } else {
-                row.createSpan({cls: 'rss-fr-thumb-placeholder'});
+                hasThumb = true;
             }
-            const main = row.createDiv({cls: 'rss-fr-main'});
+            const main = row.createDiv({cls: 'rss-fr-main' + (hasThumb ? '' : ' no-thumb')});
             const topLine = main.createDiv({cls: 'rss-fr-top'});
             topLine.createSpan({cls: 'rss-fr-feed', text: feed.title()});
             topLine.createSpan({cls: 'rss-fr-title', text: item.title()});
@@ -167,7 +167,7 @@ export default class ViewLoader extends ItemView {
             let descRaw = '';
             try { descRaw = (item.description && item.description()) || (item.body && item.body()) || ''; } catch(_) {}
             const text = descRaw.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-            descLine.setText(text.slice(0, 220));
+            descLine.setText(this.truncateWords(text, 220));
 
             row.onclick = () => {
                 if (item.markRead && !item.read()) {
@@ -198,5 +198,13 @@ export default class ViewLoader extends ItemView {
         if (!root) return;
         const width = this.contentContainer.getBoundingClientRect().width;
         if (width < 720) root.addClass('rss-narrow'); else root.removeClass('rss-narrow');
+    }
+
+    private truncateWords(text: string, maxChars: number): string {
+        if (text.length <= maxChars) return text;
+        let slice = text.slice(0, maxChars - 1);
+        const lastSpace = slice.lastIndexOf(' ');
+        if (lastSpace > 40) slice = slice.slice(0, lastSpace); // avoid cutting very early
+        return slice.trimEnd() + '…';
     }
 }

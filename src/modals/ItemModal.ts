@@ -230,6 +230,15 @@ export class ItemModal extends Modal {
         nextButton.buttonEl.addClass("rss-button");
 
         contentEl.createEl('h1', {cls: ["rss-title", "rss-selectable"], text: this.item.title()});
+        // short description excerpt under title
+        try {
+            const rawDesc = (this.item.description && this.item.description()) || '';
+            const textDesc = rawDesc.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+            if (textDesc) {
+                const excerpt = this.truncateWords(textDesc, 260);
+                contentEl.createEl('p', {cls: ['rss-excerpt','rss-selectable'], text: excerpt});
+            }
+        } catch(_) {}
 
         const subtitle = contentEl.createEl("h3", "rss-subtitle");
         subtitle.addClass("rss-selectable");
@@ -397,6 +406,14 @@ export class ItemModal extends Modal {
 
     async onOpen(): Promise<void> {
         await this.display();
+    }
+
+    private truncateWords(text: string, maxChars: number): string {
+        if (text.length <= maxChars) return text;
+        let slice = text.slice(0, maxChars - 1);
+        const lastSpace = slice.lastIndexOf(' ');
+        if (lastSpace > 40) slice = slice.slice(0, lastSpace);
+        return slice.trimEnd() + '…';
     }
 
     removeDanglingElements(el: HTMLElement) : void {

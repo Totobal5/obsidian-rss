@@ -203,6 +203,8 @@ ul[style*="margin-left"] {
 .rss-fr-row-article img.rss-fr-thumb { width:78px; height:54px; object-fit:cover; border-radius:4px; }
 .rss-fr-row-article .rss-fr-thumb-placeholder { width:78px; height:54px; border-radius:4px; background:var(--background-modifier-border); }
 .rss-fr-row-article .rss-fr-main { display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+.rss-fr-row-article .rss-fr-main.no-thumb { grid-column: span 2; }
+.rss-fr-row-article:not(:has(.rss-fr-thumb)) { grid-template-columns: 20px 16px 1fr; }
 .rss-fr-row-article .rss-fr-top { display:grid; grid-template-columns: minmax(110px,180px) 1fr 70px; gap:10px; align-items:center; }
 .rss-fr-row-article .rss-fr-top .rss-fr-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
 .rss-fr-row-article .rss-fr-top .rss-fr-feed { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
