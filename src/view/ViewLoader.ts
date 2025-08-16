@@ -1,4 +1,4 @@
-import {setIcon, ItemView, WorkspaceLeaf, sanitizeHTMLToDom} from "obsidian";
+import {setIcon, ItemView, WorkspaceLeaf} from "obsidian";
 import RssReaderPlugin from "../main";
 import {VIEW_ID} from "../consts";
 import t from "../l10n/locale";
@@ -50,7 +50,11 @@ export default class ViewLoader extends ItemView {
 
     protected async onClose(): Promise<void> {
         if (this.resizeObserver) {
-            try { this.resizeObserver.disconnect(); } catch(_) {}
+            try { 
+                this.resizeObserver.disconnect(); 
+            } catch(error) {
+                console.warn('Failed to disconnect resize observer:', error);
+            }
             this.resizeObserver = undefined;
         }
     }
@@ -110,11 +114,16 @@ export default class ViewLoader extends ItemView {
         setIcon(starIcon, 'star');
         starIcon.style.marginRight = '8px';
         
-        // Obtener todos los items favoritos
+        // Get all favorite items using consistent detection
         const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
-            const feedFavorites = feed.items().filter((item: any) => item.starred && item.starred());
+            const feedFavorites = feed.items().filter((item: any) => {
+                // Use direct property access for consistency with main.ts filtering
+                return item.favorite === true;
+            });
             return favorites.concat(feedFavorites);
         }, []);
+        
+        console.log(`🔍 Found ${favoriteItems.length} favorite items across all feeds`);
         
         favoritesButton.createSpan({text: `Favorites (${favoriteItems.length})`});
         
@@ -123,6 +132,16 @@ export default class ViewLoader extends ItemView {
             subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
             favoritesButton.addClass('active');
             
+            // Recalcular favoritos dinámicamente cada vez que se hace click
+            const currentFavoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
+                const feedFavorites = feed.items().filter((item: any) => {
+                    return item.favorite === true;
+                });
+                return favorites.concat(feedFavorites);
+            }, []);
+            
+            console.log(`🔍 Favorites button clicked: Found ${currentFavoriteItems.length} current favorite items`);
+            
             // Crear feed temporal para favoritos
             const favoritesFeed = {
                 id: () => -1,
@@ -130,12 +149,12 @@ export default class ViewLoader extends ItemView {
                 title: () => 'Favorites',
                 name: () => 'Favorites',
                 favicon: () => null as string | null,
-                unreadCount: () => favoriteItems.length,
+                unreadCount: () => currentFavoriteItems.length,
                 ordering: () => 0,
                 link: () => '#favorites',
                 folderId: () => -1,
                 folderName: () => 'Special',
-                items: () => favoriteItems
+                items: () => currentFavoriteItems
             };
             
             this.renderList(listPane, detailPane, [favoritesFeed]);
@@ -214,6 +233,67 @@ export default class ViewLoader extends ItemView {
         console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
 
+    private async updateFavoritesCounter() {
+        try {
+            const provider = this.plugin.providers.getCurrent();
+            const folders = await provider.folders();
+            const globalFeedsList: Feed[] = [];
+            
+            for (const folder of folders) {
+                globalFeedsList.push(...folder.feeds());
+            }
+            
+            // Count favorites
+            const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
+                const feedFavorites = feed.items().filter((item: any) => {
+                    return item.favorite === true;
+                });
+                return favorites.concat(feedFavorites);
+            }, []);
+            
+            // Update favorites button text
+            const favoritesButton = this.containerEl.querySelector('.rss-favorites-button');
+            if (favoritesButton) {
+                const span = favoritesButton.querySelector('span:last-child'); // Select the text span, not the icon span
+                if (span) {
+                    span.textContent = `Favorites (${favoriteItems.length})`;
+                }
+                
+                // If favorites button is currently active, refresh the view
+                if (favoritesButton.hasClass('active')) {
+                    console.log(`🔍 Refreshing active favorites view with ${favoriteItems.length} items`);
+                    
+                    // Find the list and detail panes
+                    const listPane = this.containerEl.querySelector('.rss-fr-list') as HTMLElement;
+                    const detailPane = this.containerEl.querySelector('.rss-fr-detail') as HTMLElement;
+                    
+                    if (listPane && detailPane) {
+                        // Create updated favorites feed
+                        const favoritesFeed = {
+                            id: () => -1,
+                            url: () => '#favorites',
+                            title: () => 'Favorites',
+                            name: () => 'Favorites',
+                            favicon: () => null as string | null,
+                            unreadCount: () => favoriteItems.length,
+                            ordering: () => 0,
+                            link: () => '#favorites',
+                            folderId: () => -1,
+                            folderName: () => 'Special',
+                            items: () => favoriteItems
+                        };
+                        
+                        this.renderList(listPane, detailPane, [favoritesFeed]);
+                    }
+                }
+            }
+            
+            console.log(`🔍 Updated favorites counter: ${favoriteItems.length} items`);
+        } catch (error) {
+            console.error('Failed to update favorites counter:', error);
+        }
+    }
+
     private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: Feed[]) {
         listPane.empty();
         const collected: {feed: Feed, item: any}[] = [];
@@ -242,40 +322,48 @@ export default class ViewLoader extends ItemView {
             const row = listPane.createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
-            const starEl = row.createSpan({cls: 'rss-fr-star', text: item.starred && item.starred() ? '★' : '☆'});
+            
+            // Create star button for favorites
+            const isCurrentlyStarred = item.favorite === true;
+            const starEl = row.createSpan({cls: 'rss-fr-star', text: isCurrentlyStarred ? '★' : '☆'});
+            if (isCurrentlyStarred) {
+                starEl.addClass('is-starred');
+            }
+            
             starEl.onclick = async (e) => {
                 e.stopPropagation();
                 
-                // Usar la acción FAVORITE para persistir correctamente
+                console.log(`🔍 ViewLoader: Star clicked for item: "${item.title()}", current favorite: ${item.favorite}`);
+                
+                // Use the FAVORITE action for consistent behavior
                 await Action.FAVORITE.processor(this.plugin, item);
                 
-                // Actualizar la UI inmediatamente
-                const isStarred = item.starred();
+                // Update the UI immediately by checking the updated state
+                const isStarred = item.favorite === true;
                 starEl.setText(isStarred ? '★' : '☆');
                 starEl.toggleClass('is-starred', isStarred);
                 
-                // Invalidar caché para refrescar contadores
-                const provider = await this.plugin.providers.getById('local');
-                if (provider && 'invalidateCache' in provider) {
-                    (provider as any).invalidateCache();
-                }
+                console.log(`🔍 ViewLoader: Updated star UI, new favorite state: ${isStarred}`);
                 
-                // Refrescar la vista si estamos en Favorites
-                const activeButton = this.contentContainer.querySelector('.active');
-                if (activeButton && activeButton.textContent?.includes('Favorites')) {
-                    await this.displayData();
-                }
+                // Update favorites counter and refresh view if needed
+                await this.updateFavoritesCounter();
             };
             // Thumbnail
             let thumbUrl = '';
-            try { thumbUrl = (item.mediaThumbnail && item.mediaThumbnail()) || ''; } catch(_) {}
+            try { 
+                thumbUrl = (item.mediaThumbnail && item.mediaThumbnail()) || ''; 
+            } catch(error) {
+                console.debug('Failed to get media thumbnail:', error);
+            }
             if (!thumbUrl) {
                 // fallback: search <img src> in description/body
                 try {
                     const raw = (item.description && item.description()) || (item.body && item.body()) || '';
                     const m = raw.match(/<img[^>]+src="([^"]+)"/i);
                     if (m) thumbUrl = m[1];
-                } catch(_) {}
+                } catch(error) {
+                    console.debug('Failed to extract image from content:', error);
+                }
             }
             let hasThumb = false;
             if (thumbUrl) {
@@ -296,7 +384,11 @@ export default class ViewLoader extends ItemView {
             const descLine = main.createDiv({cls: 'rss-fr-desc'});
             // strip HTML tags
             let descRaw = '';
-            try { descRaw = (item.description && item.description()) || (item.body && item.body()) || ''; } catch(_) {}
+            try { 
+                descRaw = (item.description && item.description()) || (item.body && item.body()) || ''; 
+            } catch(error) {
+                console.debug('Failed to get item description:', error);
+            }
             const text = descRaw.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
             descLine.setText(this.truncateWords(text, 220));
 
@@ -306,6 +398,8 @@ export default class ViewLoader extends ItemView {
                     row.removeClass('unread');
                     row.addClass('read');
                     dot.addClass('read');
+                    // Save read state
+                    this.plugin.writeFeedContent((items: any[]) => items);
                 }
                 new ItemModal(this.plugin, item, collected.map(c=>c.item), true).open();
             };
@@ -317,8 +411,8 @@ export default class ViewLoader extends ItemView {
         const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const diffMs = startToday.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
         const dayDiff = Math.round(diffMs / 86400000);
-    if (dayDiff === 0) return 'Today';
-    if (dayDiff === 1) return 'Yesterday';
+	if (dayDiff === 0) return 'Today';
+	if (dayDiff === 1) return 'Yesterday';
         return d.toLocaleDateString();
     }
 

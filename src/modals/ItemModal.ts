@@ -153,23 +153,60 @@ export class ItemModal extends Modal {
     }
 
     async markAsFavorite(): Promise<void> {
-        console.log(`🔍 Before favorite action - starred(): ${this.item.starred()}`);
+        console.log(`🔍 ItemModal: Before favorite toggle - starred(): ${this.item.starred()}`);
         
+        // Use the FAVORITE action to handle the logic
         await Action.FAVORITE.processor(this.plugin, this.item);
         
-        console.log(`🔍 After favorite action - starred(): ${this.item.starred()}`);
-        
-        // Actualizar el botón inmediatamente
         const isStarred = this.item.starred();
+        console.log(`🔍 ItemModal: After favorite toggle - starred(): ${isStarred}`);
+        
+        // Update the button UI immediately
         this.favoriteButton.setIcon(isStarred ? 'star-glyph' : 'star');
         this.favoriteButton.setTooltip(isStarred ? t("remove_from_favorites") : t("mark_as_favorite"));
         
-        console.log(`🔍 Updated UI - icon: ${isStarred ? 'star-glyph' : 'star'}`);
+        console.log(`🔍 ItemModal: Updated button - icon: ${isStarred ? 'star-glyph' : 'star'}`);
         
-        // Invalidar caché para refrescar la vista
-        const provider = await this.plugin.providers.getById('local');
-        if (provider && 'invalidateCache' in provider) {
-            (provider as any).invalidateCache();
+        // Refresh the main view to update counters and lists
+        await this.refreshMainView();
+    }
+
+    private async refreshMainView(): Promise<void> {
+        // Encontrar y refrescar solo el contador de la vista principal de RSS
+        const views = this.plugin.app.workspace.getLeavesOfType('RSS_FEED');
+        for (const view of views) {
+            if (view.view && 'updateFavoritesCounter' in view.view) {
+                console.log(`🔍 Updating main RSS view favorites counter after favorite change`);
+                await (view.view as any).updateFavoritesCounter();
+            }
+        }
+    }
+
+    private async syncFavoriteState(): Promise<void> {
+        try {
+            // Obtener el estado actual desde el provider
+            const provider = this.plugin.providers.getCurrent();
+            const folders = await provider.folders();
+            
+            // Buscar el item actual en los datos persistidos
+            for (const folder of folders) {
+                for (const feed of folder.feeds()) {
+                    for (const savedItem of feed.items()) {
+                        // Comparar por título (ya que el ID puede ser undefined)
+                        if (savedItem.title() === this.item.title()) {
+                            // Sincronizar el estado de favorito
+                            const savedStarred = savedItem.starred && savedItem.starred();
+                            if (this.item.markStarred && savedStarred !== this.item.starred()) {
+                                console.log(`🔍 Syncing favorite state for "${this.item.title()}" from ${this.item.starred()} to ${savedStarred}`);
+                                this.item.markStarred(savedStarred);
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('🔍 Error syncing favorite state:', error);
         }
     }
 
@@ -180,6 +217,16 @@ export class ItemModal extends Modal {
     }
 
     async display(): Promise<void> {
+        // Debug: Estado inicial del item al abrir modal
+        console.log(`🔍 Modal opening - item.starred(): ${this.item.starred()}`);
+        console.log(`🔍 Modal opening - item title: ${this.item.title()}`);
+        console.log(`🔍 Modal opening - item.id(): ${this.item.id()}`);
+        
+        // REMOVED: syncFavoriteState() was causing unnecessary reloads
+        // The item state should already be correct from the store
+        
+        console.log(`🔍 Using current state - item.starred(): ${this.item.starred()}`);
+        
         this.modalEl.addClass("rss-modal");
         const {contentEl} = this;
         contentEl.empty();
@@ -277,7 +324,9 @@ export class ItemModal extends Modal {
                 const p = contentEl.createEl('p', {cls: ['rss-excerpt','rss-selectable']});
                 p.innerHTML = this.linkify(excerpt);
             }
-        } catch(_) {}
+        } catch(error) {
+            console.warn('Failed to process item content for display:', error);
+        }
 
         const subtitle = contentEl.createEl("h3", "rss-subtitle");
         subtitle.addClass("rss-selectable");

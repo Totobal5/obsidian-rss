@@ -120,8 +120,7 @@ function getContent(element: Element | Document, names: string[]): string {
             const data = getElementByName(element, elementName);
             if (data) {
                 if (data.nodeName === elementName) {
-                    //@ts-ignore
-                    const tmp = data.getAttribute(attr);
+                    const tmp = (data as Element).getAttribute?.(attr);
                     if (tmp && tmp.length > 0) {
                         value = tmp;
                     }
@@ -130,20 +129,16 @@ function getContent(element: Element | Document, names: string[]): string {
         } else {
             const data = getElementByName(element, name);
             if (data) {
-                //@ts-ignore
-                if(data.wholeText && data.wholeText.length > 0) {
-                    //@ts-ignore
-                    value = data.wholeText;
+                const textNode = data as any;
+                if(textNode.wholeText && textNode.wholeText.length > 0) {
+                    value = textNode.wholeText;
                 }
 
-                //@ts-ignore
-                if (!value && data.nodeValue && data.nodeValue.length > 0) {
-                    value = data.nodeValue;
+                if (!value && textNode.nodeValue && textNode.nodeValue.length > 0) {
+                    value = textNode.nodeValue;
                 }
-                //@ts-ignore
-                if (!value && data.innerHTML && data.innerHTML.length > 0) {
-                    //@ts-ignore
-                    value = data.innerHTML;
+                if (!value && textNode.innerHTML && textNode.innerHTML.length > 0) {
+                    value = textNode.innerHTML;
                 }
             }
         }
@@ -203,7 +198,7 @@ async function requestFeed(feed: RssFeed) : Promise<string> {
 }
 
 // Wrapper con timeout para feeds lentos
-async function requestFeedWithTimeout(feed: RssFeed, timeoutMs: number = 10000): Promise<string> {
+async function requestFeedWithTimeout(feed: RssFeed, timeoutMs = 10000): Promise<string> {
     return Promise.race([
         requestFeed(feed),
         new Promise<string>((_, reject) => 

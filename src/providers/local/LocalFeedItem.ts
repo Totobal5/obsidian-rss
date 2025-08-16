@@ -66,7 +66,7 @@ export class LocalFeedItem implements Item {
     }
 
     markCreated(created: boolean): void {
-
+        this.item.created = created;
     }
 
     markRead(read: boolean): void {
@@ -109,6 +109,7 @@ export class LocalFeedItem implements Item {
     }
 
     setTags(tags: string[]): void {
+        this.item.tags = tags || [];
     }
 
     starred(): boolean {

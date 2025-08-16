@@ -4,7 +4,7 @@ import {
     normalizePath,
     Notice,
     TextComponent,
-    MarkdownPreviewRenderer, moment, View, TextFileView
+    MarkdownPreviewRenderer, moment
 } from "obsidian";
 import {TextInputPrompt} from "./modals/TextInputPrompt";
 import {FILE_NAME_REGEX} from "./consts";

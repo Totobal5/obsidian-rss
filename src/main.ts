@@ -27,7 +27,6 @@ import {CleanupModal} from "./modals/CleanupModal";
 import {TextInputPrompt} from "./modals/TextInputPrompt";
 import {ArticleSuggestModal} from "./modals/ArticleSuggestModal";
 import {Providers} from "./providers/Providers";
-import {NextcloudFeedProvider} from "./providers/nextcloud/NextcloudFeedProvider";
 import {LocalFeedProvider} from "./providers/local/LocalFeedProvider";
 
 export default class RssReaderPlugin extends Plugin {
@@ -172,26 +171,38 @@ export default class RssReaderPlugin extends Plugin {
 
 
             feedsStore.subscribe((feeds: RssFeedContent[]) => {
+                // Ensure feeds is always an array
+                if (!Array.isArray(feeds)) {
+                    console.warn('🔍 feeds is not an array:', typeof feeds, feeds);
+                    return;
+                }
+
                 //keep sorted store sorted when the items change.
                 const sorted = groupBy(feeds, "folder");
                 sortedFeedsStore.update(() => sorted);
 
-                let items: RssFeedItem[] = [];
-                for (const feed in Object.keys(feeds)) {
-                    //@ts-ignore
-                    const feedItems = feeds[feed].items;
-                    items = items.concat(feedItems);
-                }
+                // Flatten all items more efficiently
+                const items: RssFeedItem[] = [];
+                feeds.forEach((feed: RssFeedContent) => {
+                    if (feed && feed.items) {
+                        items.push(...feed.items);
+                    }
+                });
 
-                //collect wallabag.xml tags for auto completion
+                //collect tags for auto completion more efficiently
                 const tags: string[] = [];
-                for (const item of items) {
-                    if (item !== undefined)
-                        tags.push(...item.tags);
-                }
+                items.forEach((item: RssFeedItem) => {
+                    if (item && item.tags && Array.isArray(item.tags)) {
+                        item.tags.forEach((tag: string) => {
+                            if (tag && tag.length > 0) {
+                                tags.push(tag);
+                            }
+                        });
+                    }
+                });
 
-                //@ts-ignore
-                const fileTags = this.app.metadataCache.getTags();
+                const metadataCache = this.app.metadataCache as any;
+                const fileTags = metadataCache.getTags?.() || {};
                 for (const tag of Object.keys(fileTags)) {
                     tags.push(tag.replace('#', ''));
                 }
@@ -213,8 +224,7 @@ export default class RssReaderPlugin extends Plugin {
     filterItems(items: RssFeedItem[]): void {
         const filtered = new Array<FilteredFolderContent>();
         for (const filter of this.settings.filtered) {
-            // @ts-ignore
-            const sortOrder = SortOrder[filter.sortOrder];
+            const sortOrder = (SortOrder as any)[filter.sortOrder] || SortOrder.DATE_NEWEST;
             let filteredItems: RssFeedItem[];
 
             if (filter.read && filter.unread) {
@@ -319,9 +329,20 @@ export default class RssReaderPlugin extends Plugin {
             const finalArray: T[] = [];
 
             for (const object of array2) {
+                const existing = mergedObjectMap[object.hash];
+                
+                // Preserve favorite state and other user data from existing items
+                const existingItem = existing as any;
+                const newItem = object as any;
+                
                 mergedObjectMap[object.hash] = {
-                    ...mergedObjectMap[object.hash],
-                    ...object,
+                    ...object,                    // New data from feed
+                    ...existing,                  // Existing user data (favorites, read status, etc.)
+                    ...object,                    // Override with new feed data again
+                    favorite: existingItem?.favorite || false,  // Preserve favorite state specifically
+                    read: existingItem?.read || false,           // Preserve read state specifically
+                    created: existingItem?.created || false,     // Preserve created state specifically
+                    tags: existingItem?.tags || [],              // Preserve tags
                 };
             }
 
@@ -338,31 +359,42 @@ export default class RssReaderPlugin extends Plugin {
         }
 
         const fetchStart = performance.now();
-        let result: RssFeedContent[] = [];
-        for (const feed of this.settings.feeds) {
+        // Fetch all feeds in parallel instead of sequentially
+        const feedPromises = this.settings.feeds.map(async (feed) => {
             const feedStart = performance.now();
-            const items = await getFeedItems(feed);
-            console.log(`📡 Feed "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
-            if (items)
-                result.push(items);
-        }
+            try {
+                const items = await getFeedItems(feed);
+                console.log(`📡 Feed "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
+                return items;
+            } catch (error) {
+                console.error(`❌ Failed to load feed "${feed.name}":`, error);
+                return null;
+            }
+        });
+        
+        const results = await Promise.all(feedPromises);
+        let result: RssFeedContent[] = results.filter(item => item !== null) as RssFeedContent[];
         console.log(`🌐 All feeds fetched in ${(performance.now() - fetchStart).toFixed(2)}ms`);
 
         const mergeStart = performance.now();
         const items = this.settings.items;
-        for (const feed of items) {
+        
+        // Optimize processing using more efficient methods
+        items.forEach(feed => {
             if (feed.hash === undefined || feed.hash === "") {
                 feed.hash = <string>new Md5().appendStr(feed.name).appendStr(feed.folder ? feed.folder : "no-folder").end();
             }
-            for (const item of feed.items) {
-                if (item.folder !== feed.folder || item.feed !== feed.name) {
-                    feed.items.remove(item);
-                }
+            
+            // Filter invalid items more efficiently
+            feed.items = feed.items.filter(item => {
+                // Generate hash if missing
                 if (item.hash === undefined) {
                     item.hash = <string>new Md5().appendStr(item.title).appendStr(item.folder).appendStr(item.link).end();
                 }
-            }
-        }
+                // Keep items that match feed metadata
+                return item.folder === feed.folder && item.feed === feed.name;
+            });
+        });
 
         result = mergeWith(result, items, customizer);
         console.log(`🔀 Data merged in ${(performance.now() - mergeStart).toFixed(2)}ms`);
@@ -418,7 +450,7 @@ export default class RssReaderPlugin extends Plugin {
     async migrateData(): Promise<void> {
         const configPath = this.app.vault.configDir + "/plugins/rss-reader/data.json";
         const config = JSON.parse(await this.app.vault.adapter.read(configPath));
-        
+
         for(const feed of config.feeds) {
             if(feed.folder === undefined) {
                 feed.folder = "";
@@ -568,10 +600,24 @@ export default class RssReaderPlugin extends Plugin {
         await this.updateFeeds();
     }
 
-    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => Partial<RssFeedContent[]>): Promise<void> {
-        await feedsStore.update((old) => ({...changeOpts(old)}));
+    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
+        const currentItems = this.settings.items || [];
+        const updatedItems = changeOpts(currentItems);
+        
+        // Ensure we're always working with arrays
+        if (!Array.isArray(updatedItems)) {
+            console.error('🔍 writeFeedContent: changeOpts did not return an array:', updatedItems);
+            return;
+        }
+        
+        console.log('🔍 writeFeedContent: updating items array, length:', updatedItems.length);
+        
+        // Update the store with the new items array
+        await feedsStore.update(() => updatedItems);
+        
+        // Save to settings
         await this.writeSettings((old) => ({
-            items: changeOpts(old.items)
+            items: updatedItems
         }));
     }
 
