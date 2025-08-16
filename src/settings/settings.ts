@@ -43,7 +43,19 @@ export interface RssReaderSettings {
     provider: string,
 }
 
-export const DEFAULT_SETTINGS: RssReaderSettings = Object.freeze({
+function deepFreeze<T>(obj: T): T {
+    if (obj && typeof obj === 'object') {
+        Object.freeze(obj);
+        for (const key of Object.getOwnPropertyNames(obj)) {
+            // @ts-ignore
+            const value = obj[key];
+            if (value && (typeof value === 'object') && !Object.isFrozen(value)) deepFreeze(value);
+        }
+    }
+    return obj;
+}
+
+export const DEFAULT_SETTINGS: RssReaderSettings = deepFreeze({
     feeds: [],
     updateTime: 60,
     filtered: [{

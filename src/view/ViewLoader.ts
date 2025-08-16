@@ -5,6 +5,7 @@ import t from "../l10n/locale";
 import {ItemModal} from "../modals/ItemModal";
 import {Feed} from "../providers/Feed";
 import Action from "../actions/Action";
+import {RSS_EVENTS} from '../events';
 
 export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
@@ -256,9 +257,9 @@ export default class ViewLoader extends ItemView {
         this.applyResponsiveClass();
 
         // Listener para refrescar contadores de no leídos
-        document.addEventListener('rss-reader-read-updated', () => this.refreshSidebarCounts(), {once:false});
+    document.addEventListener(RSS_EVENTS.UNREAD_COUNTS_CHANGED, () => this.refreshSidebarCounts(), {once:false});
         // Listener para actualizar estrellas cuando se cambian en el modal
-        document.addEventListener('rss-reader-favorite-updated', (ev: any) => {
+    document.addEventListener(RSS_EVENTS.FAVORITE_UPDATED, (ev: any) => {
             const link = ev?.detail?.link;
             const fav = ev?.detail?.favorite;
             if (!link) return;
@@ -272,7 +273,7 @@ export default class ViewLoader extends ItemView {
             this.updateFavoritesCounter();
         }, {once:false});
         // Listener para aplicar estado de lectura sobre filas desde el modal
-        document.addEventListener('rss-reader-item-read-updated', (ev: any) => {
+    document.addEventListener(RSS_EVENTS.ITEM_READ_UPDATED, (ev: any) => {
             const link = ev?.detail?.link;
             const read = ev?.detail?.read;
             if (!link) return;
@@ -466,7 +467,7 @@ export default class ViewLoader extends ItemView {
             descLine.setText(this.truncateWords(text, 220));
 
             const refreshCounters = () => {
-                try { document.dispatchEvent(new CustomEvent('rss-reader-read-updated')); } catch {}
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
             };
 
             // Toggle read state by clicking the left dot

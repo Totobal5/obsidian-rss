@@ -15,6 +15,7 @@
   "author": "Johannes Theiner",
   "license": "GPL-3.0",
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/lodash.groupby": "^4.6.6",
     "@types/lodash.keyby": "^4.6.6",
     "@types/lodash.mergewith": "^4.6.6",

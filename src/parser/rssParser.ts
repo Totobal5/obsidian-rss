@@ -195,25 +195,28 @@ function getAllItems(doc: Document): Element[] {
     return items;
 }
 
-async function requestFeed(feed: RssFeed) : Promise<string> {
+async function requestFeed(feed: RssFeed, signal?: AbortSignal) : Promise<string> {
+    if (signal?.aborted) throw new DOMException('Aborted','AbortError');
     return await request({url: feed.url});
 }
 
-// Wrapper con timeout para feeds lentos
-async function requestFeedWithTimeout(feed: RssFeed, timeoutMs = 10000): Promise<string> {
-    return Promise.race([
-        requestFeed(feed),
-        new Promise<string>((_, reject) => 
-            setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms for feed: ${feed.name}`)), timeoutMs)
-        )
-    ]);
+// Timeout + abort aware fetch
+async function requestFeedWithTimeout(feed: RssFeed, timeoutMs = 10000, signal?: AbortSignal): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        const to = setTimeout(()=> reject(new Error(`Timeout after ${timeoutMs}ms for feed: ${feed.name}`)), timeoutMs);
+        const abortHandler = () => {
+            clearTimeout(to);
+            reject(new DOMException('Aborted','AbortError'));
+        };
+        signal?.addEventListener('abort', abortHandler, {once:true});
+        requestFeed(feed, signal).then(str=> {clearTimeout(to); resolve(str);}, err=> {clearTimeout(to); reject(err);});
+    });
 }
 
-export async function getFeedItems(feed: RssFeed): Promise<RssFeedContent> {
+export async function getFeedItems(feed: RssFeed, opts?: { signal?: AbortSignal }): Promise<RssFeedContent | undefined> {
     let data;
     try {
-        // Usar timeout de 10 segundos para feeds lentos
-        const rawData = await requestFeedWithTimeout(feed, 10000);
+        const rawData = await requestFeedWithTimeout(feed, 10000, opts?.signal);
         data = new window.DOMParser().parseFromString(rawData, "text/xml");
     } catch (e) {
         console.error(`❌ Feed "${feed.name}" failed:`, e);
@@ -246,6 +249,12 @@ export async function getFeedItems(feed: RssFeed): Promise<RssFeedContent> {
         }
     })
     const image = getContent(data, ["image", "image.url", "icon"]);
+
+    // If document is not a valid RSS/Atom (no title + no items) treat as invalid
+    const titleCandidate = getContent(data, ["title"]);
+    if ((!titleCandidate || titleCandidate.length === 0) && rawItems.length === 0) {
+        return undefined;
+    }
 
     const content: RssFeedContent = {
         title: getContent(data, ["title"]),

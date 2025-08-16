@@ -11,8 +11,8 @@ import t from "../l10n/locale";
 import {copy, rssToMd} from "../functions";
 import {Item} from "../providers/Item";
 import {pluginApi} from "@vanakat/plugin-api";
+import {RSS_EVENTS} from '../events';
 
-// Declaraciones de tipos para Twitter
 declare global {
     interface Window {
         twttr?: {
@@ -24,99 +24,60 @@ declare global {
 }
 
 export class ItemModal extends Modal {
-
     private readonly plugin: RssReaderPlugin;
     private readonly item: Item;
     private readonly items: Item[];
-
     private readonly save: boolean;
-
     private readButton: ButtonComponent;
     private favoriteButton: ButtonComponent;
 
     constructor(plugin: RssReaderPlugin, item: Item, items: Item[], save = true) {
         super(plugin.app);
-    this.plugin = plugin;
-    this.items = items ?? [];
-    this.item = item;
-    this.save = save;
-
+        this.plugin = plugin;
+        this.items = items ?? [];
+        this.item = item;
+        this.save = save;
 
         if (this.save) {
-            this.item.markRead(true);
-
-            const feedContents = this.plugin.settings.items;
-            this.plugin.writeFeedContent(() => {
-                return feedContents;
-            });
-
-            if (!this.plugin.settings) {
-                return;
-            }
-
-            if (this.plugin.settings.hotkeys.read) {
-                this.scope.register([], this.plugin.settings.hotkeys.read, () => {
-                    this.markAsRead();
-                });
-            }
-
-            if (this.plugin.settings.hotkeys.favorite) {
-                this.scope.register([], this.plugin.settings.hotkeys.favorite, () => {
-                    this.markAsFavorite();
-                });
-            }
-
-            if (this.plugin.settings.hotkeys.tags) {
-                this.scope.register([], this.plugin.settings.hotkeys.tags, () => {
-                    Action.TAGS.processor(this.plugin, this.item);
-                });
-            }
+            try {
+                this.item.markRead(true);
+                const feedContents = this.plugin.settings.items;
+                this.plugin.writeFeedContent(() => feedContents);
+            } catch {}
         }
 
+        if (!this.plugin.settings) return;
+
+        if (this.plugin.settings.hotkeys.read) {
+            this.scope.register([], this.plugin.settings.hotkeys.read, () => this.markAsRead());
+        }
+        if (this.plugin.settings.hotkeys.favorite) {
+            this.scope.register([], this.plugin.settings.hotkeys.favorite, () => this.markAsFavorite());
+        }
         if (this.plugin.settings.hotkeys.create) {
-            this.scope.register([], this.plugin.settings.hotkeys.create, () => {
-                Action.CREATE_NOTE.processor(this.plugin, this.item);
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.create, () => Action.CREATE_NOTE.processor(this.plugin, this.item));
         }
-
         if (this.plugin.settings.hotkeys.paste) {
-            this.scope.register([], this.plugin.settings.hotkeys.paste, () => {
-                Action.PASTE.processor(this.plugin, this.item);
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.paste, () => Action.PASTE.processor(this.plugin, this.item));
         }
-
         if (this.plugin.settings.hotkeys.copy) {
-            this.scope.register([], this.plugin.settings.hotkeys.copy, () => {
-                Action.COPY.processor(this.plugin, this.item);
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.copy, () => Action.COPY.processor(this.plugin, this.item));
         }
-
         if (this.plugin.settings.hotkeys.open) {
-            this.scope.register([], this.plugin.settings.hotkeys.open, () => {
-                Action.OPEN.processor(this.plugin, this.item);
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.open, () => Action.OPEN.processor(this.plugin, this.item));
         }
-
         if (this.plugin.settings.hotkeys.next) {
-            this.scope.register([], this.plugin.settings.hotkeys.next, () => {
-                this.next();
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.next, () => this.next());
         }
         if (this.plugin.settings.hotkeys.previous) {
-            this.scope.register([], this.plugin.settings.hotkeys.previous, () => {
-                this.previous();
-            });
+            this.scope.register([], this.plugin.settings.hotkeys.previous, () => this.previous());
         }
-        if(window['PluginApi']) {
+        if (window['PluginApi']) {
             const tts = pluginApi("tts");
             if (tts && this.plugin.settings.hotkeys.tts) {
                 this.scope.register([], this.plugin.settings.hotkeys.tts, () => {
                     if (tts.isSpeaking()) {
-                        if (tts.isPaused()) {
-                            tts.resume();
-                        } else {
-                            tts.pause();
-                        }
+                        if (tts.isPaused()) tts.resume(); else tts.pause();
                         return;
                     }
                     const content = htmlToMarkdown(this.item.body());
@@ -126,32 +87,31 @@ export class ItemModal extends Modal {
         }
     }
 
-    previous(): void {
+    previous(): void { // move to earlier index
         if (!this.items || this.items.length === 0) return;
-        let index = this.items.findIndex((item) => item === this.item);
-        index++;
+        let index = this.items.findIndex((itm) => itm === this.item);
+        index--;
         if (index >= 0 && index < this.items.length) {
-            const item = this.items[index];
-            if (item !== undefined) {
-                // Ensure the target item is marked read & persisted before opening
-                this.markItemReadAndPersist(item).then(() => {
+            const target = this.items[index];
+            if (target) {
+                this.markItemReadAndPersist(target).then(() => {
                     this.close();
-                    new ItemModal(this.plugin, item, this.items, this.save).open();
+                    new ItemModal(this.plugin, target, this.items, this.save).open();
                 });
             }
         }
     }
 
-    next(): void {
+    next(): void { // move to later index
         if (!this.items || this.items.length === 0) return;
-        let index = this.items.findIndex((item) => item === this.item);
-        index--;
+        let index = this.items.findIndex((itm) => itm === this.item);
+        index++;
         if (index >= 0 && index < this.items.length) {
-            const item = this.items[index];
-            if (item !== undefined) {
-                this.markItemReadAndPersist(item).then(() => {
+            const target = this.items[index];
+            if (target) {
+                this.markItemReadAndPersist(target).then(() => {
                     this.close();
-                    new ItemModal(this.plugin, item, this.items, this.save).open();
+                    new ItemModal(this.plugin, target, this.items, this.save).open();
                 });
             }
         }
@@ -176,8 +136,8 @@ export class ItemModal extends Modal {
                     const localProvider: any = await this.plugin.providers.getById('local');
                     localProvider?.invalidateCache && localProvider.invalidateCache();
                 } catch {}
-                try { document.dispatchEvent(new CustomEvent('rss-reader-read-updated')); } catch {}
-                try { document.dispatchEvent(new CustomEvent('rss-reader-item-read-updated', {detail:{link: raw.link, read: true}})); } catch {}
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {detail:{link: raw.link, read: true}})); } catch {}
             }
         } catch (e) { console.warn('Failed to auto-mark read on navigation', e); }
     }
@@ -206,7 +166,7 @@ export class ItemModal extends Modal {
 
         // Emit global event so list view can update star instantly
         try {
-            document.dispatchEvent(new CustomEvent('rss-reader-favorite-updated', {detail: {link: rawItem.link, favorite: isFavorite}}));
+            document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {detail: {link: rawItem.link, favorite: isFavorite}}));
         } catch(e) { console.debug('favorite event dispatch failed', e); }
         
         console.log(`🔍 ItemModal: Updated button - icon: ${isFavorite ? 'star-glyph' : 'star'}`);
@@ -233,7 +193,8 @@ export class ItemModal extends Modal {
     this.readButton.setIcon(isRead ? 'eye-off' : 'eye');
     this.readButton.setTooltip(isRead ? t("mark_as_unread") : t("mark_as_read"));
     this.readButton.buttonEl.toggleClass('is-read', isRead);
-    try { document.dispatchEvent(new CustomEvent('rss-reader-item-read-updated', {detail:{link: rawItem.link, read: isRead}})); } catch {}
+    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {detail:{link: rawItem.link, read: isRead}})); } catch {}
+    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
     }
 
     async display(): Promise<void> {

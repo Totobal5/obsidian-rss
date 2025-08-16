@@ -28,15 +28,17 @@ import {TextInputPrompt} from "./modals/TextInputPrompt";
 import {ArticleSuggestModal} from "./modals/ArticleSuggestModal";
 import {Providers} from "./providers/Providers";
 import {LocalFeedProvider} from "./providers/local/LocalFeedProvider";
+import {RSS_EVENTS} from './events';
 
 export default class RssReaderPlugin extends Plugin {
     settings: RssReaderSettings;
     providers: Providers;
+    private updating = false;
+    private updateAbort?: AbortController;
 
     async onload(): Promise<void> {
         const startTime = performance.now();
         console.log('🚀 RSS Reader: Starting plugin load...');
-
         //update settings object whenever store contents change.
         this.register(
             settingsStore.subscribe((value: RssReaderSettings) => {
@@ -142,7 +144,7 @@ export default class RssReaderPlugin extends Plugin {
                     // 3. Volver a cargar feeds desde cero
                     await this.updateFeeds();
                     // 4. Despachar evento para refrescar contadores en la UI
-                    window.dispatchEvent(new CustomEvent('rss-reader-read-updated'));
+                    window.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
                     new Notice('Entradas regeneradas');
                     console.log('✅ Regeneración completada correctamente');
                 } catch (e) {
@@ -341,25 +343,42 @@ export default class RssReaderPlugin extends Plugin {
     }
 
     async updateFeeds(): Promise<void> {
+        if (this.updating) {
+            console.log('⏳ updateFeeds skipped (already running)');
+            return;
+        }
+        this.updating = true;
+        this.updateAbort = new AbortController();
         const updateStartTime = performance.now();
         console.log("🔄 RSS Reader: Starting feed update...");
 
         const fetchStart = performance.now();
         // Fetch all feeds in parallel instead of sequentially
+        const timeout = (p: Promise<any>, ms: number) => new Promise((res, rej) => {
+            const to = setTimeout(()=> {rej(new Error('timeout'));}, ms);
+            p.then(v=>{clearTimeout(to); res(v);}, e=>{clearTimeout(to); rej(e);});
+        });
         const feedPromises = this.settings.feeds.map(async (feed) => {
             const feedStart = performance.now();
             try {
-                const items = await getFeedItems(feed);
+                const items = await timeout(getFeedItems(feed, {signal: this.updateAbort.signal}), 15000);
+                if (!items) return null; // invalid feed
                 console.log(`📡 Feed "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
                 return items;
-            } catch (error) {
-                console.error(`❌ Failed to load feed "${feed.name}":`, error);
+            } catch (error: any) {
+                if (error?.name === 'AbortError') {
+                    console.warn(`⛔ Feed fetch aborted: ${feed.name}`);
+                } else if (error?.message === 'timeout') {
+                    console.warn(`⏱️ Feed timed out: ${feed.name}`);
+                } else {
+                    console.error(`❌ Failed to load feed "${feed.name}":`, error);
+                }
                 return null;
             }
         });
-        
+
         const results = await Promise.all(feedPromises);
-        let newFeeds: RssFeedContent[] = results.filter(item => item !== null) as RssFeedContent[];
+        let newFeeds: RssFeedContent[] = results.filter(item => item) as RssFeedContent[];
         console.log(`🌐 All feeds fetched in ${(performance.now() - fetchStart).toFixed(2)}ms`);
 
         const mergeStart = performance.now();
@@ -409,7 +428,8 @@ export default class RssReaderPlugin extends Plugin {
             localProvider.invalidateCache();
         }
         
-        console.log(`✅ Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
+    console.log(`✅ Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
+    this.updating = false;
     }
 
     onunload(): void {
@@ -569,10 +589,14 @@ export default class RssReaderPlugin extends Plugin {
             try {
                 JSON.parse(file);
             } catch (e) {
-                console.log(t("RSS_Reader") + "  could not parse json, check if the plugins data.json is valid.");
-                console.error(e);
-                new Notice(t("RSS_Reader") + " could not parse plugin data. If this message keeps showing up, check the console");
-                return Promise.resolve();
+                console.error('❌ Invalid data.json, loading defaults.', e);
+                new Notice(t("RSS_Reader") + ': data.json invalid, loading defaults');
+                this.settings = {...DEFAULT_SETTINGS};
+                settingsStore.set(this.settings);
+                configuredFeedsStore.set(this.settings.feeds);
+                feedsStore.set(this.settings.items);
+                foldedState.set(this.settings.folded);
+                return;
             }
         }
 
@@ -588,7 +612,7 @@ export default class RssReaderPlugin extends Plugin {
     }
 
     async saveSettings(): Promise<void> {
-        await this.saveData(this.settings);
+    await this.saveData(this.settings);
     }
 
     async writeFeeds(changeOpts: (feeds: RssFeed[]) => Partial<RssFeed[]>): Promise<void> {

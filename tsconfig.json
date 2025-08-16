@@ -13,7 +13,6 @@
     "isolatedModules": false,
     "types": [
       "node",
-      "svelte",
       "jest"
     ],
     "lib": [

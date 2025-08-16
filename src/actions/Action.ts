@@ -4,6 +4,7 @@ import {htmlToMarkdown, Notice} from "obsidian";
 import {TagModal} from "../modals/TagModal";
 import t from "../l10n/locale";
 import {Item} from "../providers/Item";
+import {RSS_EVENTS} from '../events';
 
 export default class Action {
 
@@ -60,8 +61,9 @@ export default class Action {
             const localProvider: any = await plugin.providers.getById('local');
             localProvider?.invalidateCache && localProvider.invalidateCache();
         } catch {}
-    // Notify open views to refresh unread counters
-    try { document.dispatchEvent(new CustomEvent('rss-reader-read-updated')); } catch {}
+        // Notify open views to refresh unread counters & specific item state
+        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {detail:{link: rawItem.link, read: newState}})); } catch {}
         return Promise.resolve();
     })));
 
@@ -119,7 +121,8 @@ export default class Action {
             console.debug('Cache invalidation skipped:', e);
         }
         
-        console.log(`🔍 FAVORITE Action - completed successfully`);
+    console.log(`🔍 FAVORITE Action - completed successfully`);
+    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {detail:{link: rawItem.link, favorite: rawItem.favorite}})); } catch {}
         return Promise.resolve();
     })));
 
