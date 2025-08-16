@@ -6,9 +6,11 @@ import {LocalFeedItem} from "./LocalFeedItem";
 export class LocalFeed implements Feed {
 
     private readonly parsed: RssFeedContent;
+    private readonly customName: string;
 
-    constructor(parsed: RssFeedContent) {
+    constructor(parsed: RssFeedContent, customName?: string) {
         this.parsed = parsed;
+        this.customName = customName || parsed.name || parsed.title;
     }
 
 
@@ -46,6 +48,10 @@ export class LocalFeed implements Feed {
 
     title(): string {
         return this.parsed.title;
+    }
+
+    name(): string {
+        return this.customName;
     }
 
     unreadCount(): number {

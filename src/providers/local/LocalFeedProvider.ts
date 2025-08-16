@@ -34,7 +34,7 @@ export class LocalFeedProvider implements FeedProvider {
         const feeds = this.plugin.settings.feeds;
         for (const feed of feeds) {
             const content = await getFeedItems(feed);
-            result.push(new LocalFeed(content));
+            result.push(new LocalFeed(content, feed.name));
         }
 
         return result;
@@ -47,7 +47,7 @@ export class LocalFeedProvider implements FeedProvider {
             folder: '',
         }
         const content = await getFeedItems(feed);
-        return new LocalFeed(content);
+        return new LocalFeed(content, feed.name);
     }
 
     async filteredFolders(): Promise<Folder[]> {

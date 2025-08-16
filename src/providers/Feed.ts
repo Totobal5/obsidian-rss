@@ -11,6 +11,7 @@ export interface Feed {
     id(): number;
     url(): string;
     title(): string;
+    name(): string;
     favicon(): string;
     unreadCount(): number;
     ordering(): FeedOrder;

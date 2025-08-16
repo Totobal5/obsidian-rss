@@ -91,7 +91,7 @@ export default class ViewLoader extends ItemView {
                     fav.style.height = '14px';
                     fav.style.marginRight = '4px';
                 }
-                feedHeader.createSpan({text: feed.title()});
+                feedHeader.createSpan({text: feed.name()});
                 feedHeader.onclick = () => this.renderList(listPane, detailPane, [feed]);
             }
         }
@@ -162,7 +162,7 @@ export default class ViewLoader extends ItemView {
             }
             const main = row.createDiv({cls: 'rss-fr-main' + (hasThumb ? '' : ' no-thumb')});
             const topLine = main.createDiv({cls: 'rss-fr-top'});
-            topLine.createSpan({cls: 'rss-fr-feed', text: feed.title()});
+            topLine.createSpan({cls: 'rss-fr-feed', text: feed.name()});
             topLine.createSpan({cls: 'rss-fr-title', text: item.title()});
             const timeLabel = dateObj ? dateObj.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
             topLine.createSpan({cls: 'rss-fr-date', text: timeLabel});

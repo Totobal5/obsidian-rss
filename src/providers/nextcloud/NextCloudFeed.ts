@@ -34,6 +34,10 @@ export class NextCloudFeed implements Feed {
         return this.json.title;
     }
 
+    name(): string {
+        return this.json.title; // For NextCloud, use title as name
+    }
+
     unreadCount(): number {
         return this.json.unreadCount;
     }
