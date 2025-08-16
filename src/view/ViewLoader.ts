@@ -237,37 +237,44 @@ export default class ViewLoader extends ItemView {
         try {
             const provider = this.plugin.providers.getCurrent();
             const folders = await provider.folders();
-            const globalFeedsList: Feed[] = [];
-            
+            // Count favorites directly from RAW data, not wrapper objects
+            let favoriteCount = 0;
             for (const folder of folders) {
-                globalFeedsList.push(...folder.feeds());
+                for (const feed of folder.feeds()) {
+                    // Access the raw parsed data directly
+                    const rawFeed = (feed as any).parsed;
+                    if (rawFeed && rawFeed.items) {
+                        favoriteCount += rawFeed.items.filter((rawItem: any) => rawItem.favorite === true).length;
+                    }
+                }
             }
-            
-            // Count favorites
-            const favoriteItems = globalFeedsList.reduce((favorites: any[], feed) => {
-                const feedFavorites = feed.items().filter((item: any) => {
-                    return item.favorite === true;
-                });
-                return favorites.concat(feedFavorites);
-            }, []);
             
             // Update favorites button text
             const favoritesButton = this.containerEl.querySelector('.rss-favorites-button');
             if (favoritesButton) {
                 const span = favoritesButton.querySelector('span:last-child'); // Select the text span, not the icon span
                 if (span) {
-                    span.textContent = `Favorites (${favoriteItems.length})`;
+                    span.textContent = `Favorites (${favoriteCount})`;
                 }
                 
                 // If favorites button is currently active, refresh the view
                 if (favoritesButton.hasClass('active')) {
-                    console.log(`🔍 Refreshing active favorites view with ${favoriteItems.length} items`);
+                    console.log(`🔍 Refreshing active favorites view with ${favoriteCount} items`);
                     
                     // Find the list and detail panes
                     const listPane = this.containerEl.querySelector('.rss-fr-list') as HTMLElement;
                     const detailPane = this.containerEl.querySelector('.rss-fr-detail') as HTMLElement;
                     
                     if (listPane && detailPane) {
+                        // Collect actual favorite items for the view
+                        const favoriteItems: any[] = [];
+                        for (const folder of folders) {
+                            for (const feed of folder.feeds()) {
+                                const items = feed.items().filter((item: any) => item.favorite === true);
+                                favoriteItems.push(...items);
+                            }
+                        }
+                        
                         // Create updated favorites feed
                         const favoritesFeed = {
                             id: () => -1,
@@ -275,7 +282,7 @@ export default class ViewLoader extends ItemView {
                             title: () => 'Favorites',
                             name: () => 'Favorites',
                             favicon: () => null as string | null,
-                            unreadCount: () => favoriteItems.length,
+                            unreadCount: () => favoriteCount,
                             ordering: () => 0,
                             link: () => '#favorites',
                             folderId: () => -1,
@@ -288,7 +295,7 @@ export default class ViewLoader extends ItemView {
                 }
             }
             
-            console.log(`🔍 Updated favorites counter: ${favoriteItems.length} items`);
+            console.log(`🔍 Updated favorites counter: ${favoriteCount} items`);
         } catch (error) {
             console.error('Failed to update favorites counter:', error);
         }
@@ -346,7 +353,7 @@ export default class ViewLoader extends ItemView {
                 
                 console.log(`🔍 ViewLoader: Updated star UI, new favorite state: ${isStarred} (refreshed)`);
                 
-                // Update favorites counter and refresh view if needed
+                // Update favorites counter immediately with raw data access
                 await this.updateFavoritesCounter();
             };
             // Thumbnail

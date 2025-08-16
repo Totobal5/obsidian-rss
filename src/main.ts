@@ -338,7 +338,7 @@ export default class RssReaderPlugin extends Plugin {
                 mergedObjectMap[object.hash] = {
                     ...object,                    // New data from feed
                     ...existing,                  // Existing user data (favorites, read status, etc.)
-                    ...object,                    // Override with new feed data again
+                    // DON'T override with object again - preserve user data!
                     favorite: existingItem?.favorite || false,  // Preserve favorite state specifically
                     read: existingItem?.read || false,           // Preserve read state specifically
                     created: existingItem?.created || false,     // Preserve created state specifically
