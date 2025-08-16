@@ -54,21 +54,43 @@ export default class Action {
 
     static FAVORITE = new Action(t("mark_as_favorite_remove"), "star", ((async (plugin, item) : Promise<void> => {
         const wasStarred = item.starred();
+        console.log(`🔍 FAVORITE Action - before: starred=${wasStarred}`);
         
         if (wasStarred) {
             item.markStarred(false);
             new Notice(t("removed_from_favorites"));
+            console.log(`🔍 FAVORITE Action - removed from favorites`);
         } else {
             item.markStarred(true);
             new Notice(t("added_to_favorites"));
+            console.log(`🔍 FAVORITE Action - added to favorites`);
         }
         
-        // Persistir el cambio en el feedContent
-        const feedContents = plugin.settings.items;
-        await plugin.writeFeedContent(() => {
-            return feedContents;
+        console.log(`🔍 FAVORITE Action - after markStarred: starred=${item.starred()}`);
+        
+        // Encontrar y actualizar el item específico en los feedContents
+        const itemId = item.id();
+        const itemTitle = item.title();
+        const isNowStarred = item.starred();
+        
+        console.log(`🔍 FAVORITE Action - updating item: id=${itemId}, title="${itemTitle}", starred=${isNowStarred}`);
+        
+        await plugin.writeFeedContent((feedContents) => {
+            // Buscar el feed que contiene este item y actualizar su estado
+            const updatedFeeds = feedContents.map(feed => {
+                const updatedItems = feed.items.map(feedItem => {
+                    if (feedItem.id === itemId || feedItem.title === itemTitle) {
+                        console.log(`🔍 Found matching item in feed "${feed.name}", updating favorite to ${isNowStarred}`);
+                        return { ...feedItem, favorite: isNowStarred };
+                    }
+                    return feedItem;
+                });
+                return { ...feed, items: updatedItems };
+            });
+            return updatedFeeds;
         });
         
+        console.log(`🔍 FAVORITE Action - completed successfully`);
         return Promise.resolve();
     })));
 

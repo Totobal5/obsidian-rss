@@ -4,6 +4,7 @@ import {VIEW_ID} from "../consts";
 import t from "../l10n/locale";
 import {ItemModal} from "../modals/ItemModal";
 import {Feed} from "../providers/Feed";
+import Action from "../actions/Action";
 
 export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
@@ -242,11 +243,28 @@ export default class ViewLoader extends ItemView {
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
             const starEl = row.createSpan({cls: 'rss-fr-star', text: item.starred && item.starred() ? '★' : '☆'});
-            starEl.onclick = (e) => {
+            starEl.onclick = async (e) => {
                 e.stopPropagation();
-                if (item.markStarred) item.markStarred(!item.starred());
-                starEl.setText(item.starred() ? '★' : '☆');
-                starEl.toggleClass('is-starred', item.starred());
+                
+                // Usar la acción FAVORITE para persistir correctamente
+                await Action.FAVORITE.processor(this.plugin, item);
+                
+                // Actualizar la UI inmediatamente
+                const isStarred = item.starred();
+                starEl.setText(isStarred ? '★' : '☆');
+                starEl.toggleClass('is-starred', isStarred);
+                
+                // Invalidar caché para refrescar contadores
+                const provider = await this.plugin.providers.getById('local');
+                if (provider && 'invalidateCache' in provider) {
+                    (provider as any).invalidateCache();
+                }
+                
+                // Refrescar la vista si estamos en Favorites
+                const activeButton = this.contentContainer.querySelector('.active');
+                if (activeButton && activeButton.textContent?.includes('Favorites')) {
+                    await this.displayData();
+                }
             };
             // Thumbnail
             let thumbUrl = '';

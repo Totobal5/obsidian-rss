@@ -153,12 +153,18 @@ export class ItemModal extends Modal {
     }
 
     async markAsFavorite(): Promise<void> {
+        console.log(`🔍 Before favorite action - starred(): ${this.item.starred()}`);
+        
         await Action.FAVORITE.processor(this.plugin, this.item);
+        
+        console.log(`🔍 After favorite action - starred(): ${this.item.starred()}`);
         
         // Actualizar el botón inmediatamente
         const isStarred = this.item.starred();
         this.favoriteButton.setIcon(isStarred ? 'star-glyph' : 'star');
         this.favoriteButton.setTooltip(isStarred ? t("remove_from_favorites") : t("mark_as_favorite"));
+        
+        console.log(`🔍 Updated UI - icon: ${isStarred ? 'star-glyph' : 'star'}`);
         
         // Invalidar caché para refrescar la vista
         const provider = await this.plugin.providers.getById('local');
