@@ -315,48 +315,6 @@ export default class RssReaderPlugin extends Plugin {
     async updateFeeds(): Promise<void> {
         const updateStartTime = performance.now();
         console.log("🔄 RSS Reader: Starting feed update...");
-        interface IStringTMap<T> {
-            [key: string]: T;
-        }
-
-        type IIdentified = {
-            hash: string;
-        };
-
-        function mergeArrayById<T extends IIdentified>(array1: T[], array2: T[]): T[] {
-            const mergedObjectMap: IStringTMap<T> = keyBy(array1, 'hash');
-
-            const finalArray: T[] = [];
-
-            for (const object of array2) {
-                const existing = mergedObjectMap[object.hash];
-                
-                // Preserve favorite state and other user data from existing items
-                const existingItem = existing as any;
-                const newItem = object as any;
-                
-                mergedObjectMap[object.hash] = {
-                    ...object,                    // New data from feed
-                    ...existing,                  // Existing user data (favorites, read status, etc.)
-                    // DON'T override with object again - preserve user data!
-                    favorite: existingItem?.favorite || false,  // Preserve favorite state specifically
-                    read: existingItem?.read || false,           // Preserve read state specifically
-                    created: existingItem?.created || false,     // Preserve created state specifically
-                    tags: existingItem?.tags || [],              // Preserve tags
-                };
-            }
-
-            values(mergedObjectMap).forEach(object => {
-                finalArray.push(object);
-            });
-            return finalArray;
-        }
-
-        function customizer(objValue: string | any[], srcValue: any) {
-            if (Array.isArray(objValue)) {
-                return mergeArrayById(objValue, srcValue);
-            }
-        }
 
         const fetchStart = performance.now();
         // Fetch all feeds in parallel instead of sequentially
@@ -373,35 +331,48 @@ export default class RssReaderPlugin extends Plugin {
         });
         
         const results = await Promise.all(feedPromises);
-        let result: RssFeedContent[] = results.filter(item => item !== null) as RssFeedContent[];
+        let newFeeds: RssFeedContent[] = results.filter(item => item !== null) as RssFeedContent[];
         console.log(`🌐 All feeds fetched in ${(performance.now() - fetchStart).toFixed(2)}ms`);
 
         const mergeStart = performance.now();
-        const items = this.settings.items;
+        const existingFeeds = this.settings.items || [];
         
-        // Optimize processing using more efficient methods
-        items.forEach(feed => {
-            if (feed.hash === undefined || feed.hash === "") {
-                feed.hash = <string>new Md5().appendStr(feed.name).appendStr(feed.folder ? feed.folder : "no-folder").end();
-            }
+        // SIMPLE APPROACH: Only add NEW items, don't touch existing ones
+        const finalFeeds: RssFeedContent[] = [...existingFeeds]; // Start with existing feeds
+        
+        for (const newFeed of newFeeds) {
+            // Find existing feed by name and folder
+            let existingFeed = finalFeeds.find(f => f.name === newFeed.name && f.folder === newFeed.folder);
             
-            // Filter invalid items more efficiently
-            feed.items = feed.items.filter(item => {
-                // Generate hash if missing
-                if (item.hash === undefined) {
-                    item.hash = <string>new Md5().appendStr(item.title).appendStr(item.folder).appendStr(item.link).end();
+            if (!existingFeed) {
+                // Feed doesn't exist, add it completely
+                finalFeeds.push(newFeed);
+                console.log(`➕ Added new feed: ${newFeed.name} (${newFeed.items.length} items)`);
+            } else {
+                // Feed exists, only add NEW items by comparing LINK
+                const existingLinks = new Set(existingFeed.items.map(item => item.link));
+                const newItems = newFeed.items.filter(item => !existingLinks.has(item.link));
+                
+                if (newItems.length > 0) {
+                    existingFeed.items.push(...newItems);
+                    console.log(`🆕 Added ${newItems.length} new items to feed: ${newFeed.name}`);
+                } else {
+                    console.log(`✅ No new items for feed: ${newFeed.name}`);
                 }
-                // Keep items that match feed metadata
-                return item.folder === feed.folder && item.feed === feed.name;
-            });
-        });
-
-        result = mergeWith(result, items, customizer);
-        console.log(`🔀 Data merged in ${(performance.now() - mergeStart).toFixed(2)}ms`);
+                
+                // Update feed metadata but keep items intact
+                existingFeed.title = newFeed.title;
+                existingFeed.description = newFeed.description;
+                existingFeed.image = newFeed.image;
+                existingFeed.link = newFeed.link;
+            }
+        }
+        
+        console.log(`🔀 Simple merge completed in ${(performance.now() - mergeStart).toFixed(2)}ms`);
         
         const saveStart = performance.now();
         new Notice(t("refreshed_feeds"));
-        await this.writeFeedContent(() => result);
+        await this.writeFeedContent(() => finalFeeds);
         console.log(`💾 Feed content saved in ${(performance.now() - saveStart).toFixed(2)}ms`);
         
         // Invalidar cache del provider para que folders() use datos frescos
