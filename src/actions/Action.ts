@@ -53,15 +53,22 @@ export default class Action {
     })));
 
     static FAVORITE = new Action(t("mark_as_favorite_remove"), "star", ((async (plugin, item) : Promise<void> => {
-        if (item.starred()) {
+        const wasStarred = item.starred();
+        
+        if (wasStarred) {
             item.markStarred(false);
             new Notice(t("removed_from_favorites"));
         } else {
             item.markStarred(true);
             new Notice(t("added_to_favorites"));
         }
-        // Guardar cambios en settings
-        await plugin.saveSettings();
+        
+        // Persistir el cambio en el feedContent
+        const feedContents = plugin.settings.items;
+        await plugin.writeFeedContent(() => {
+            return feedContents;
+        });
+        
         return Promise.resolve();
     })));
 

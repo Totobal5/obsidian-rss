@@ -36,8 +36,8 @@ export default class ViewLoader extends ItemView {
         this.contentContainer = container.createDiv({cls: 'rss-scrollable-content'});
 
         // Resize observer para adaptar layout al ancho del panel (no solo viewport)
-    this.resizeObserver = new ResizeObserver(() => this.applyResponsiveClass());
-    this.resizeObserver.observe(this.contentContainer);
+        this.resizeObserver = new ResizeObserver(() => this.applyResponsiveClass());
+        this.resizeObserver.observe(this.contentContainer);
 
         // Acción de refrescar usando la barra de acciones estándar
         this.addAction('refresh-cw', t('refresh_feeds'), async () => {
