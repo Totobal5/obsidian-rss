@@ -68,6 +68,24 @@ export default class ViewLoader extends ItemView {
         const provider = this.plugin.providers.getCurrent();
         const folders = await provider.folders();
 
+        // Agregar botón "All Feeds" al principio
+        const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
+        const globeIcon = allFeedsButton.createSpan();
+        setIcon(globeIcon, 'globe');
+        globeIcon.style.marginRight = '8px';
+        allFeedsButton.createSpan({text: 'All Feeds'});
+        
+        // All feeds initial - obtener todos los feeds para el botón global
+        const globalFeedsList: any[] = [];
+        for (const f of folders) globalFeedsList.push(...f.feeds());
+        
+        allFeedsButton.onclick = () => {
+            // Remover clase active de otros elementos
+            subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
+            allFeedsButton.addClass('active');
+            this.renderList(listPane, detailPane, globalFeedsList);
+        };
+
         for (const folder of folders) {
             const folderHeader = subsPane.createDiv({cls: 'rss-folder-header'});
             const triangle = folderHeader.createSpan();
@@ -80,6 +98,14 @@ export default class ViewLoader extends ItemView {
                 collapsed = !collapsed;
                 setIcon(triangle, collapsed ? 'right-triangle' : 'down-triangle');
                 feedsWrap.style.display = collapsed ? 'none' : 'block';
+                
+                // Si no está colapsado, mostrar todos los feeds de esta carpeta
+                if (!collapsed) {
+                    // Remover clase active de otros elementos
+                    subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
+                    folderHeader.addClass('active');
+                    this.renderList(listPane, detailPane, folder.feeds());
+                }
             };
             for (const feed of folder.feeds()) {
                 const feedHeader = feedsWrap.createDiv({cls: 'rss-feed-header'});
@@ -92,14 +118,18 @@ export default class ViewLoader extends ItemView {
                     fav.style.marginRight = '4px';
                 }
                 feedHeader.createSpan({text: feed.name()});
-                feedHeader.onclick = () => this.renderList(listPane, detailPane, [feed]);
+                feedHeader.onclick = () => {
+                    // Remover clase active de otros elementos
+                    subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
+                    feedHeader.addClass('active');
+                    this.renderList(listPane, detailPane, [feed]);
+                };
             }
         }
 
-        // All feeds initial
-        const allFeeds: any[] = [];
-        for (const f of folders) allFeeds.push(...f.feeds());
-        this.renderList(listPane, detailPane, allFeeds);
+        // Renderizar inicialmente todas las entradas y marcar el botón "All Feeds" como activo
+        allFeedsButton.addClass('active');
+        this.renderList(listPane, detailPane, globalFeedsList);
     // aplicar clase responsive inmediatamente
     this.applyResponsiveClass();
     }
