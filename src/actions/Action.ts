@@ -47,10 +47,8 @@ export default class Action {
             item.markRead(true);
             new Notice(t("marked_as_read"));
         }
-        /*const items = plugin.settings.items;
-        await plugin.writeFeedContent(() => {
-            return items;
-        });*/
+        // Guardar cambios en settings
+        await plugin.saveSettings();
         return Promise.resolve();
     })));
 
@@ -62,11 +60,8 @@ export default class Action {
             item.markStarred(true);
             new Notice(t("added_to_favorites"));
         }
-        /*const items = plugin.settings.items;
-        await plugin.writeFeedContent(() => {
-            return items;
-        });
-         */
+        // Guardar cambios en settings
+        await plugin.saveSettings();
         return Promise.resolve();
     })));
 

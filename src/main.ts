@@ -35,7 +35,8 @@ export default class RssReaderPlugin extends Plugin {
     providers: Providers;
 
     async onload(): Promise<void> {
-        console.log('loading plugin rss reader');
+        const startTime = performance.now();
+        console.log('🚀 RSS Reader: Starting plugin load...');
 
         //update settings object whenever store contents change.
         this.register(
@@ -43,11 +44,15 @@ export default class RssReaderPlugin extends Plugin {
                 this.settings = value;
             })
         );
+        
+        const settingsStart = performance.now();
         await this.loadSettings();
+        console.log(`⚙️  Settings loaded in ${(performance.now() - settingsStart).toFixed(2)}ms`);
+        
+        const providersStart = performance.now();
         this.providers = new Providers(this);
-
         this.providers.register(new LocalFeedProvider(this));
-        //this.providers.register(new NextcloudFeedProvider(this));
+        console.log(`🔌 Providers initialized in ${(performance.now() - providersStart).toFixed(2)}ms`);
 
         this.addCommand({
             id: "rss-open",
@@ -120,10 +125,12 @@ export default class RssReaderPlugin extends Plugin {
             }
         });
 
+        const commandsStart = performance.now();
         this.registerView(VIEW_ID, (leaf: WorkspaceLeaf) => new ViewLoader(leaf, this));
-
         this.addSettingTab(new RSSReaderSettingsTab(this.app, this));
+        console.log(`📋 Commands and views registered in ${(performance.now() - commandsStart).toFixed(2)}ms`);
 
+        const intervalStart = performance.now();
         let interval: number;
         if (this.settings.updateTime !== 0) {
             interval = window.setInterval(async () => {
@@ -137,7 +144,9 @@ export default class RssReaderPlugin extends Plugin {
                 await this.loadSettings();
             }, 1000 * 60));
         }
+        console.log(`⏰ Intervals setup in ${(performance.now() - intervalStart).toFixed(2)}ms`);
 
+        const storeStart = performance.now();
         //reset update timer on settings change.
         settingsStore.subscribe((settings: RssReaderSettings) => {
             if (interval !== undefined)
@@ -152,6 +161,9 @@ export default class RssReaderPlugin extends Plugin {
             this.settings = settings;
             this.saveSettings();
         });
+        console.log(`📦 Store subscriptions setup in ${(performance.now() - storeStart).toFixed(2)}ms`);
+
+        console.log(`✅ RSS Reader loaded successfully in ${(performance.now() - startTime).toFixed(2)}ms total`);
 
         this.app.workspace.onLayoutReady(async () => {
             await this.migrateData();
@@ -291,7 +303,8 @@ export default class RssReaderPlugin extends Plugin {
     }
 
     async updateFeeds(): Promise<void> {
-        console.log("updating feeds");
+        const updateStartTime = performance.now();
+        console.log("🔄 RSS Reader: Starting feed update...");
         interface IStringTMap<T> {
             [key: string]: T;
         }
@@ -324,13 +337,18 @@ export default class RssReaderPlugin extends Plugin {
             }
         }
 
+        const fetchStart = performance.now();
         let result: RssFeedContent[] = [];
         for (const feed of this.settings.feeds) {
+            const feedStart = performance.now();
             const items = await getFeedItems(feed);
+            console.log(`📡 Feed "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
             if (items)
                 result.push(items);
         }
+        console.log(`🌐 All feeds fetched in ${(performance.now() - fetchStart).toFixed(2)}ms`);
 
+        const mergeStart = performance.now();
         const items = this.settings.items;
         for (const feed of items) {
             if (feed.hash === undefined || feed.hash === "") {
@@ -347,8 +365,14 @@ export default class RssReaderPlugin extends Plugin {
         }
 
         result = mergeWith(result, items, customizer);
+        console.log(`🔀 Data merged in ${(performance.now() - mergeStart).toFixed(2)}ms`);
+        
+        const saveStart = performance.now();
         new Notice(t("refreshed_feeds"));
         await this.writeFeedContent(() => result);
+        console.log(`💾 Feed content saved in ${(performance.now() - saveStart).toFixed(2)}ms`);
+        
+        console.log(`✅ Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
     }
 
     onunload(): void {

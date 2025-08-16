@@ -55,18 +55,23 @@ export default class ViewLoader extends ItemView {
     }
 
     private async displayData() {
-    this.contentContainer.empty();
-    // crear layout root separado para que querySelector funcione y evitar mezclar clases
-    this.layoutRoot = this.contentContainer.createDiv({cls: 'rss-fr-layout'});
-    const root = this.layoutRoot;
+        const displayStart = performance.now();
+        console.log("📊 RSS View: Starting display data...");
+        
+        this.contentContainer.empty();
+        // crear layout root separado para que querySelector funcione y evitar mezclar clases
+        this.layoutRoot = this.contentContainer.createDiv({cls: 'rss-fr-layout'});
+        const root = this.layoutRoot;
 
-    const subsPane = root.createDiv({cls: 'rss-fr-subs'});
-    const listPane = root.createDiv({cls: 'rss-fr-list'});
-    // Detail pane not used for now, kept for future optional preview
-    const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
+        const subsPane = root.createDiv({cls: 'rss-fr-subs'});
+        const listPane = root.createDiv({cls: 'rss-fr-list'});
+        // Detail pane not used for now, kept for future optional preview
+        const detailPane = root.createDiv({cls: 'rss-fr-detail hidden'});
 
+        const providerStart = performance.now();
         const provider = this.plugin.providers.getCurrent();
         const folders = await provider.folders();
+        console.log(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
 
         // Agregar botón "All Feeds" al principio
         const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
@@ -130,8 +135,10 @@ export default class ViewLoader extends ItemView {
         // Renderizar inicialmente todas las entradas y marcar el botón "All Feeds" como activo
         allFeedsButton.addClass('active');
         this.renderList(listPane, detailPane, globalFeedsList);
-    // aplicar clase responsive inmediatamente
-    this.applyResponsiveClass();
+        // aplicar clase responsive inmediatamente
+        this.applyResponsiveClass();
+        
+        console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
 
     private renderList(listPane: HTMLElement, detailPane: HTMLElement, feeds: Feed[]) {

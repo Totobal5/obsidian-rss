@@ -70,9 +70,11 @@ export class LocalFeedItem implements Item {
     }
 
     markRead(read: boolean): void {
+        this.item.read = read;
     }
 
     markStarred(starred: boolean): void {
+        this.item.favorite = starred;
     }
 
     mediaDescription(): string {
@@ -110,7 +112,7 @@ export class LocalFeedItem implements Item {
     }
 
     starred(): boolean {
-        return false;
+        return this.item.favorite || false;
     }
 
     tags(): string[] {
