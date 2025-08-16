@@ -42,17 +42,30 @@ export class LocalFeedProvider implements FeedProvider {
         }
 
         const cacheStart = performance.now();
-        const result: Feed[] = [];
+        
+        // Cargar feeds en paralelo en lugar de secuencial
         const feeds = this.plugin.settings.feeds;
-        for (const feed of feeds) {
-            const content = await getFeedItems(feed);
-            result.push(new LocalFeed(content, feed.name));
-        }
+        console.log(`🔄 Loading ${feeds.length} feeds in parallel...`);
+        
+        const feedPromises = feeds.map(async (feed) => {
+            try {
+                const feedStart = performance.now();
+                const content = await getFeedItems(feed);
+                console.log(`📡 "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
+                return new LocalFeed(content, feed.name);
+            } catch (error) {
+                console.error(`❌ Failed to load "${feed.name}":`, error);
+                return null;
+            }
+        });
+        
+        const results = await Promise.all(feedPromises);
+        const result = results.filter(feed => feed !== null) as Feed[];
 
         // Actualizar cache
         this.feedsCache = result;
         this.cacheTimestamp = now;
-        console.log(`🔄 Feeds cached in ${(performance.now() - cacheStart).toFixed(2)}ms`);
+        console.log(`🔄 ${result.length} feeds cached in ${(performance.now() - cacheStart).toFixed(2)}ms`);
         
         return result;
     }

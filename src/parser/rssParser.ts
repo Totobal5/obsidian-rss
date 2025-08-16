@@ -202,13 +202,24 @@ async function requestFeed(feed: RssFeed) : Promise<string> {
     return await request({url: feed.url});
 }
 
+// Wrapper con timeout para feeds lentos
+async function requestFeedWithTimeout(feed: RssFeed, timeoutMs: number = 10000): Promise<string> {
+    return Promise.race([
+        requestFeed(feed),
+        new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms for feed: ${feed.name}`)), timeoutMs)
+        )
+    ]);
+}
+
 export async function getFeedItems(feed: RssFeed): Promise<RssFeedContent> {
     let data;
     try {
-        const rawData = await requestFeed(feed);
+        // Usar timeout de 10 segundos para feeds lentos
+        const rawData = await requestFeedWithTimeout(feed, 10000);
         data = new window.DOMParser().parseFromString(rawData, "text/xml");
     } catch (e) {
-        console.error(e);
+        console.error(`❌ Feed "${feed.name}" failed:`, e);
         return Promise.resolve(undefined);
     }
 
