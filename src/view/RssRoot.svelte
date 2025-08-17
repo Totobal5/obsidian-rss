@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import FolderView from './FolderView.svelte';
   import type RssReaderPlugin from '../main';
+  import { CountersService } from '../services/CountersService';
   import { RSS_EVENTS } from '../events';
   import t from '../l10n/locale';
   import type { Feed } from '../providers/Feed';
@@ -50,7 +51,7 @@
   }
 
   function refreshFavorites(rebuild = true){
-    favoriteItems = plugin.counters?.favoriteItems() ?? [];
+    favoriteItems = counters.favoriteItems();
     if (favoritesMode && rebuild) rebuildList();
   }
 
@@ -111,8 +112,9 @@
     } catch { items = []; }
     return items.filter(i=> !val(i.read)).length;
   }
+  const counters = plugin.counters || new CountersService(plugin);
   function unreadInFolder(feeds: Feed[]){ return feeds.reduce((a,f)=> a + unreadInFeed(f),0); }
-  function globalUnread(){ return plugin.counters?.globalUnread() ?? 0; }
+  function globalUnread(){ return counters.globalUnread(); }
 
   function dispatchCounts(){ try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
     if (favoritesMode) refreshFavorites();
