@@ -63,7 +63,7 @@
     "lodash.values": "^4.3.0",
     "nunjucks": "^3.2.4",
     "obsidian": "0.16.3",
-    "svelte": "^5.38.1",
+  "svelte": "^4.2.19",
   "ts-md5": "^1.2.10"
     
   }

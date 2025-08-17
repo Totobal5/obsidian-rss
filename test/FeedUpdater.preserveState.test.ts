@@ -1,4 +1,4 @@
-import {FeedUpdater} from '../src/services/FeedUpdater';
+import { jest } from '@jest/globals';
 
 class FakePlugin {
   settings: any = { feeds: [ { name:'Feed1', folder:'', url:'http://test', id:'1' } ], items: [ { name:'Feed1', folder:'', title:'Title', description:'', image:'', link:'', items:[ { link:'a', title:'A', read:true, favorite:true, created:false, visited:false, tags:[], highlights:[] } ] } ] };
@@ -8,13 +8,13 @@ class FakePlugin {
   async writeFeedContent(mut:any){ this.settings.items = mut(this.settings.items); }
 }
 
-// Mock rss parser getFeedItems to return same link with different title (simulate update)
-jest.mock('../src/parser/rssParser', () => ({
-  getFeedItems: async (): Promise<any> => ({ name:'Feed1', folder:'', title:'TitleNew', description:'', image:'', link:'', items:[ { link:'a', title:'A UPDATED', read:false, favorite:false, created:false, visited:false, tags:[], highlights:[] } ] }),
+jest.unstable_mockModule('../src/parser/rssParser', () => ({
+  getFeedItems: async () => ({ name:'Feed1', folder:'', title:'TitleNew', description:'', image:'', link:'', items:[ { link:'a', title:'A UPDATED', read:false, favorite:false, created:false, visited:false, tags:[], highlights:[] } ] })
 }));
 
 describe('FeedUpdater preserves item state', () => {
   test('read/favorite flags stay true after refresh', async () => {
+    const { FeedUpdater } = await import('../src/services/FeedUpdater');
     const plugin:any = new FakePlugin();
     const updater = new FeedUpdater(plugin);
     await updater.updateFeeds();

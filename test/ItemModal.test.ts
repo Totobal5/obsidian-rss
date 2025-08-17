@@ -1,4 +1,5 @@
 import {ItemModal} from '../src/modals/ItemModal';
+import { jest } from '@jest/globals';
 import Action from '../src/actions/Action';
 jest.mock('@vanakat/plugin-api', () => ({ pluginApi: (): null => null }));
 

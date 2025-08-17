@@ -10,32 +10,53 @@
 
   // Helpers
   function runOpen(){ onOpen(item); }
-  function onClick(){ if(!val(item.read)) toggleRead(item); runOpen(); }
+  function onClick(){
+    // Open modal first to avoid losing context if list re-renders on read toggle
+    runOpen();
+    if(!val(item.read)) {
+      // Defer toggle slightly so modal instantiation is not interrupted by rebuild
+      setTimeout(()=> toggleRead(item), 0);
+    }
+  }
   function val(v:any){ try { return typeof v === 'function' ? v() : v; } catch { return v; } }
   $: thumb = deriveThumb(item);
+  function formatDate(pd:any): string {
+    try {
+      const raw = typeof pd === 'function' ? pd() : pd;
+      if(!raw) return '';
+      const d = new Date(raw);
+      if(isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    } catch { return ''; }
+  }
 </script>
-<div class="list-item-container {val(item.read) ? 'read' : 'unread'}"
+{#key item.link}
+<div class="list-item-container rss-fr-row-article {thumb ? 'has-thumbnail' : 'no-thumbnail'} {val(item.read) ? 'read' : 'unread'}"
      on:click={onClick} on:keydown={(e)=> (e.key==='Enter'||e.key===' ') && onClick()} role="button" tabindex="0" aria-label="Open item">
-  <div class="list-item-indicators">
-    <button type="button" class="rss-dot" on:click|stopPropagation={()=> toggleRead(item)} aria-label={val(item.read) ? 'Mark unread' : 'Mark read'}></button>
-    <button type="button" class="rss-star {val(item.favorite) ? 'is-starred' : ''} rss-fr-star" on:click|stopPropagation={()=> toggleFavorite(item)} aria-label={val(item.favorite) ? 'Unfavorite' : 'Favorite'}>★</button>
-  </div>
-  <div class="list-item-content">
-    <div class="list-item-title">{typeof item.title === 'function' ? item.title() : item.title}</div>
-    <div class="list-item-feed">{feed ? feed.name() : (item.feed || '')}</div>
-    <div class="list-item-body">
-      {#if thumb}
-        <div class="list-item-thumb-wrapper">
-          <img class="list-item-thumb" src={thumb} alt="" loading="lazy"/>
-        </div>
-      {/if}
-      <div class="list-item-meta">            
-        <div class="list-item-description">{summary(item)}</div>
-      </div>
+  <!-- Dot (read/unread) -->
+  <button type="button" class="rss-dot" on:click|stopPropagation={()=> toggleRead(item)} aria-label={val(item.read) ? 'Mark unread' : 'Mark read'}></button>
+  <!-- Star/Favorite -->
+  <button type="button" class="rss-star rss-fr-star {val(item.favorite) ? 'is-starred' : ''}" on:click|stopPropagation={()=> toggleFavorite(item)} aria-label={val(item.favorite) ? 'Unfavorite' : 'Favorite'}>★</button>
+
+  {#if thumb}
+    <div class="rss-fr-thumb-wrapper">
+      <img class="rss-fr-thumb list-item-thumb" src={thumb} alt="" loading="lazy" />
     </div>
+  {/if}
+
+  <div class="rss-fr-main">
+    <div class="rss-fr-feedline">
+      <span class="rss-fr-feed">{feed ? feed.name() : (item.feed || '')}</span>
+    </div>
+    <div class="rss-fr-top">
+      <div class="rss-fr-title list-item-title">{typeof item.title === 'function' ? item.title() : item.title}</div>
+      {#if item.pubDate || (typeof item.pubDate === 'function' && item.pubDate())}
+        <div class="rss-fr-date">{formatDate(item.pubDate)}</div>
+      {/if}
+    </div>
+    <div class="rss-fr-desc list-item-description">{summary(item)}</div>
   </div>
 </div>
+{/key}
 
-<style>
-/* Intentionally left empty; relies on parent styles */
-</style>
+<!-- styles moved to global main.scss -->

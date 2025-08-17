@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import RssRoot from '../src/view/RssRoot.svelte';
+jest.mock('@vanakat/plugin-api', () => ({ pluginApi: (): null => null }));
 
 interface FeedItem { link: string; title: string; read: boolean; favorite: boolean; pubDate: string; description?: string; }
 interface FeedDef { folder: string; feeds: { name: string; items: FeedItem[] }[] }
@@ -34,7 +35,6 @@ function makePlugin(defs: FeedDef[]) {
       feeds: () => fd.feeds.map(feed => ({
         name: () => feed.name,
         link: () => '',
-        // Return original item objects so toggling updates counters source
         items: () => feed.items
       }))
     })) }) },
@@ -44,35 +44,22 @@ function makePlugin(defs: FeedDef[]) {
   return plugin;
 }
 
-describe('RssRoot interactions', () => {
-  test('mark feed as read marks items & updates unread count', async () => {
+describe('RssRoot modal open', () => {
+  test('clicking an item opens ItemModal', async () => {
     const plugin = makePlugin([
-      { folder:'Folder1', feeds:[ { name:'Feed1', items:[ { link:'a', title:'Alpha', read:false, favorite:false, pubDate: new Date().toISOString() } ] } ] }
+      { folder:'Folder1', feeds:[ { name:'Feed1', items:[ { link:'a', title:'Alpha', read:false, favorite:false, pubDate: new Date().toISOString(), description:'<p>Alpha desc</p>' } ] } ] }
     ]);
     const target = document.createElement('div');
     document.body.appendChild(target);
-    new (RssRoot as any)({ target, props:{ plugin } });
-    // Wait microtask for onMount
-    await new Promise(r=> setTimeout(r,0));
-    const badge = target.querySelector('.rss-item-count-badge');
-    expect(badge?.textContent).toBe('1');
-    (target.querySelector('.rss-mark-feed') as HTMLElement).click();
-    await new Promise(r=> setTimeout(r,0));
-    expect(plugin.settings.items[0].items[0].read).toBe(true);
-  });
-
-  test('favorite toggle updates star and favorites counter', async () => {
-    const plugin = makePlugin([
-      { folder:'Folder1', feeds:[ { name:'Feed1', items:[ { link:'a', title:'Alpha', read:false, favorite:false, pubDate: new Date().toISOString() } ] } ] }
-    ]);
-    const target = document.createElement('div');
-    document.body.appendChild(target);
+  let opened = false;
+  const handler = () => { opened = true; };
+  document.addEventListener('rss-item-opened', handler, { once: true });
     new (RssRoot as any)({ target, props:{ plugin } });
     await new Promise(r=> setTimeout(r,0));
-    const favBtn = target.querySelector('.rss-favorites-button span:last-child');
-    expect(favBtn?.textContent).toContain('(0)');
-  (target.querySelector('.rss-fr-star') as HTMLElement).click();
+    const row = target.querySelector('.list-item-container');
+    expect(row).toBeTruthy();
+    (row as HTMLElement).click();
     await new Promise(r=> setTimeout(r,0));
-    expect(favBtn?.textContent).toContain('(1)');
+  expect(opened).toBe(true);
   });
 });

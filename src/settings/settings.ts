@@ -43,6 +43,18 @@ export interface RssReaderSettings {
     },
     displayMedia: boolean,
     provider: string,
+    socialEmbeds?: {
+        enable: boolean,
+        twitterMode: 'basic' | 'nitter',
+        nitterInstance: string,
+        redditMode: 'basic' | 'teddit',
+        tedditInstance: string,
+    youtubeMode: 'standard' | 'invidious',
+    invidiousInstance: string,
+        // Futuro: youtube/invidious, mastodon opciones, etc.
+        cacheMinutes: number,
+        suppressErrors: boolean,
+    },
 }
 
 function deepFreeze<T>(obj: T): T {
@@ -115,6 +127,17 @@ export const DEFAULT_SETTINGS: RssReaderSettings = deepFreeze({
         no_folder: ""
     },
     displayMedia: true,
-    provider: "local"
+    provider: "local",
+    socialEmbeds: {
+        enable: false,
+        twitterMode: 'basic',
+        nitterInstance: 'https://nitter.net',
+        redditMode: 'basic',
+        tedditInstance: 'https://teddit.net',
+    youtubeMode: 'standard',
+    invidiousInstance: 'https://yewtu.be',
+        cacheMinutes: 60,
+        suppressErrors: true,
+    }
 });
 

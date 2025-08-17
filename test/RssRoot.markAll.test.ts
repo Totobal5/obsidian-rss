@@ -13,9 +13,16 @@ function makePlugin(feeds: FeedSpec[]) {
   const plugin: any = {
     settings: { items: settingsItems },
     counters: {
-  // Now using native flatMap (tsconfig target es2019)
-  favoriteItems: () => settingsItems.flatMap(s => s.items.filter((i:RawItem)=> i.favorite)),
-      globalUnread: () => settingsItems.reduce((a,s)=> a + s.items.filter((i:RawItem)=> !i.read).length,0)
+      // Now using native flatMap (tsconfig target es2019)
+      favoriteItems: () => settingsItems.flatMap(s => s.items.filter((i:RawItem)=> i.favorite)),
+      favoriteCount: () => settingsItems.reduce((a,s)=> a + s.items.filter((i:RawItem)=> i.favorite).length,0),
+      globalUnread: () => settingsItems.reduce((a,s)=> a + s.items.filter((i:RawItem)=> !i.read).length,0),
+      feedUnread: (name:string) => {
+        const fc = settingsItems.find(s=> s.name === name);
+        return fc ? fc.items.filter((i:RawItem)=> !i.read).length : 0;
+      },
+      folderUnread: (folder:string) => settingsItems.filter(s=> (s.folder||'').trim().toLowerCase()===folder.trim().toLowerCase())
+        .reduce((a,s)=> a + s.items.filter((i:RawItem)=> !i.read).length,0)
     },
     providers: { getCurrent: () => ({ folders: async () => {
       const grouped: Record<string, FeedSpec[]> = {};

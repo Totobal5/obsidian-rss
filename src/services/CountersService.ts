@@ -59,10 +59,15 @@ export class CountersService {
   favoriteItems(): any[] {
     const out: any[] = [];
     for (const fc of this.feeds()) {
-      if (Array.isArray(fc.items)) {
-        for (const it of fc.items) if (it?.favorite === true) out.push(it);
-      }
+      if (!Array.isArray(fc.items)) continue;
+      for (const it of fc.items) if (it?.favorite === true) out.push(it);
     }
+    // Ordenar descendente por timestamp para que más reciente aparezca primero (paridad con lista principal)
+    out.sort((a,b)=> {
+      const ta = (typeof a.pubDateMs === 'number') ? a.pubDateMs : (a.pubDate ? new Date(a.pubDate).getTime() : 0);
+      const tb = (typeof b.pubDateMs === 'number') ? b.pubDateMs : (b.pubDate ? new Date(b.pubDate).getTime() : 0);
+      return tb - ta;
+    });
     return out;
   }
 

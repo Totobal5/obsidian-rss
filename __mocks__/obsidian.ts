@@ -2,6 +2,16 @@ import "isomorphic-fetch";
 import "fs";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from 'url';
+// ESM-safe __dirname replacement (robust on Windows & POSIX)
+const __mock_dirname = (() => {
+    try {
+        const filename = fileURLToPath(import.meta.url); // e.g. C:\...\__mocks__\obsidian.ts
+        return path.dirname(filename);
+    } catch {
+        return process.cwd();
+    }
+})();
 
 // Augment HTMLElement minimally for test chain methods used in plugin
 // Use module augmentation but keep methods optional; avoid re-exporting Node shape differences
@@ -37,7 +47,9 @@ export function htmlToMarkdown(html: string): string { return html; }
 
 export async function request(request: RequestParam) : Promise<string> {
     if(!request.url.startsWith("http")) {
-        const filePath = path.join(__dirname, request.url);
+        // Normalize relative fixture path (strip leading ./)
+        const rel = request.url.replace(/^\.\//,'');
+        const filePath = path.join(__mock_dirname, rel);
         return fs.readFileSync(filePath, 'utf-8');
     }
     const result = await fetch(request.url,{

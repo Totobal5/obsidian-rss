@@ -40,7 +40,16 @@ const copyMinifiedCSS = {
                 result = await postcss([autoprefixer]).process(content, { from: 'src/style/main.scss' });
             }
 
+            // Base SCSS output
             fs.writeFileSync('build/styles.css', result.css, {encoding: 'utf-8'});
+            // If esbuild produced a component css bundle (main.css), append & remove
+            try {
+                if (fs.existsSync('build/main.css')) {
+                    const compCss = fs.readFileSync('build/main.css','utf-8');
+                    fs.appendFileSync('build/styles.css','\n/* Component CSS */\n'+compCss,'utf-8');
+                    fs.unlinkSync('build/main.css');
+                }
+            } catch { /* ignore */ }
         })
     }
 }
@@ -54,6 +63,7 @@ const copyManifest = {
     },
 };
 
+
 // Se definen todas las opciones de compilación en un objeto.
 const buildOptions = {
     banner: {
@@ -63,7 +73,8 @@ const buildOptions = {
     bundle: true,
     external: ['obsidian', 'electron', ...builtins],
     plugins: [sveltePlugin({
-        preprocess: sveltePreprocess()
+        preprocess: sveltePreprocess(),
+        emitCss: false // inline component CSS to avoid separate main.css
     }), copyManifest, copyMinifiedCSS],
     format: 'cjs',
     target: 'es2016',

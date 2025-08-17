@@ -1,7 +1,4 @@
-import {FeedUpdater} from '../src/services/FeedUpdater';
-import {RSS_EVENTS} from '../src/events';
-
-// We'll stub getFeedItems via jest manual mock by overriding global fetch-like behavior if needed.
+import { jest } from '@jest/globals';
 
 class FakePlugin {
   settings: any = { feeds: [ { name:'Feed1', folder:'', url:'http://test', id:'1' } ], items: [] };
@@ -11,14 +8,14 @@ class FakePlugin {
   async writeFeedContent(mut:any){ this.settings.items = mut(this.settings.items); }
 }
 
-// Mock rss parser getFeedItems
-jest.mock('../src/parser/rssParser', () => ({
-  getFeedItems: async () => ({ name:'Feed1', folder:'', title:'Title', description:'', image:'', link:'', items:[ { link:'a', title:'A', read:false } ] }),
-  RssFeedContent: {} as any
+// ESM mocking: register mock before importing module under test
+jest.unstable_mockModule('../src/parser/rssParser', () => ({
+  getFeedItems: async () => ({ name:'Feed1', folder:'', title:'Title', description:'', image:'', link:'', items:[ { link:'a', title:'A', read:false } ] })
 }));
 
 describe('FeedUpdater', () => {
   test('updateFeeds merges new feed items', async () => {
+    const { FeedUpdater } = await import('../src/services/FeedUpdater');
     const plugin:any = new FakePlugin();
     const updater = new FeedUpdater(plugin);
     await updater.updateFeeds();
