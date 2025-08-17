@@ -30,4 +30,3 @@ export interface Item {
 }
 
 // Runtime placeholder for ESM named import compatibility in tests
-export const Item = {} as Item;

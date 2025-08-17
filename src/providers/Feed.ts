@@ -21,5 +21,3 @@ export interface Feed {
     items(): Item[];
 }
 
-// Provide a runtime no-op export to satisfy ESM named import when only types are used elsewhere
-// (No runtime export needed; all consumers should use `import type {Feed}`)
