@@ -27,102 +27,23 @@ export default class Action {
 
     static TAGS = new Action(t("edit_tags"), "tag-glyph", (((plugin, item) => {
         const modal = new TagModal(plugin, item.tags());
-
         modal.onClose = async () => {
             item.setTags(modal.tags);
-            const items = plugin.settings.items;
-            await plugin.writeFeedContent(() => {
-                return items;
-            });
+            await plugin.settingsManager.writeFeedContentDebounced(()=>{},250);
         };
-
         modal.open();
         return Promise.resolve();
     })));
 
     static READ = new Action(t("mark_as_read_unread"), "eye", ((async (plugin, item) : Promise<void> => {
-        const rawItem = (item as any).item || item;
-        const newState = !rawItem.read;
-        rawItem.read = newState;
-        if (item.markRead) item.markRead(newState);
+        const newState = await plugin.itemStateService.toggleRead(item as any);
         new Notice(newState ? t("marked_as_read") : t("marked_as_unread"));
-
-        // Sync inside settings by link
-        try {
-            for (const feedContent of plugin.settings.items) {
-                if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                const match = feedContent.items.find((i: any) => i.link === rawItem.link);
-                if (match) { match.read = newState; break; }
-            }
-        } catch (e) { console.warn('READ sync warn', e); }
-
-        await plugin.writeFeedContent(arr => arr);
-        try {
-            const localProvider: any = await plugin.providers.getById('local');
-            localProvider?.invalidateCache && localProvider.invalidateCache();
-        } catch {}
-        // Notify open views to refresh unread counters & specific item state
-        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {detail:{link: rawItem.link, read: newState}})); } catch {}
         return Promise.resolve();
     })));
 
     static FAVORITE = new Action(t("mark_as_favorite_remove"), "star", ((async (plugin, item) : Promise<void> => {
-        // Access the raw item data directly - no more starred() nonsense
-        const rawItem = (item as any).item || item; // Get the underlying RssFeedItem
-        const wasFavorite = rawItem.favorite || false;
-        console.log(`🔍 FAVORITE Action - before: favorite=${wasFavorite}`);
-        
-        // Toggle the favorite state DIRECTLY on the raw item
-        const newFavoriteState = !wasFavorite;
-        rawItem.favorite = newFavoriteState;
-        
-        // Show appropriate notice
-        if (newFavoriteState) {
-            new Notice(t("added_to_favorites"));
-            console.log(`🔍 FAVORITE Action - added to favorites`);
-        } else {
-            new Notice(t("removed_from_favorites"));
-            console.log(`🔍 FAVORITE Action - removed from favorites`);
-        }
-        
-        console.log(`🔍 FAVORITE Action - after setting favorite: favorite=${rawItem.favorite}`);
-        // --- CRITICAL SYNC STEP ---
-        // Ensure the item inside plugin.settings.items is updated (don't rely on wrapper reference)
-        try {
-            let updated = false;
-            for (const feedContent of plugin.settings.items) {
-                if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                const match = feedContent.items.find((i: any) => i.link === rawItem.link);
-                if (match) {
-                    match.favorite = rawItem.favorite === true; // normalize to boolean
-                    updated = true;
-                    break;
-                }
-            }
-            if (!updated) {
-                console.warn('⚠️ FAVORITE Action - item not found in settings by link, cannot persist favorite state');
-            }
-        } catch (err) {
-            console.error('❌ FAVORITE Action - failed syncing favorite state into settings:', err);
-        }
-
-        // Persist settings (writeFeedContent just re-saves current array without rebuilding objects)
-        await plugin.writeFeedContent((current: any[]) => {
-            console.log(`🔍 FAVORITE Action - saving ${current.length} feeds to storage (favorites synced by link)`);
-            return current; // array already mutated in place
-        });
-
-        // Invalidate provider cache so new favorite state is visible immediately in views
-        try {
-            const localProvider: any = await plugin.providers.getById('local');
-            if (localProvider?.invalidateCache) localProvider.invalidateCache();
-        } catch(e) {
-            console.debug('Cache invalidation skipped:', e);
-        }
-        
-    console.log(`🔍 FAVORITE Action - completed successfully`);
-    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {detail:{link: rawItem.link, favorite: rawItem.favorite}})); } catch {}
+        const newFav = await plugin.itemStateService.toggleFavorite(item as any);
+        // Notice already shown inside service
         return Promise.resolve();
     })));
 

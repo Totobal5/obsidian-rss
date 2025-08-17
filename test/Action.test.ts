@@ -6,6 +6,23 @@ import {Notice} from 'obsidian';
 class FakePlugin {
   settings: any = { items: [ { name: 'Feed', items: [ { link: 'a', read: false, favorite: false } ] } ] };
   providers: any = { getById: async () => ({ invalidateCache: () => {} }) };
+  settingsManager = { writeFeedContentDebounced: async ()=>{} };
+  itemStateService = {
+    toggleRead: async (wrapperOrRaw:any) => {
+      const raw = wrapperOrRaw.item || wrapperOrRaw;
+      raw.read = !raw.read;
+      // simulate persistence by mutating settings (already mutated)
+      try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+      try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED)); } catch {}
+      return raw.read;
+    },
+    toggleFavorite: async (wrapperOrRaw:any) => {
+      const raw = wrapperOrRaw.item || wrapperOrRaw;
+      raw.favorite = !raw.favorite;
+      try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED)); } catch {}
+      return raw.favorite;
+    }
+  };
   writeFeedContent(fn: any) { this.settings.items = fn(this.settings.items); return Promise.resolve(); }
 }
 
