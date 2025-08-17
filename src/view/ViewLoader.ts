@@ -214,7 +214,7 @@ export default class ViewLoader extends ItemView {
             const folderItemCount = folder.feeds().reduce((total: number, feed: any) => total + (feed.items()?.filter((it:any)=> !it.read || !it.read())?.length || 0), 0);
             
             // Botón carpeta: marcar todos en carpeta como leídos (✓) - ahora a la izquierda del nombre
-            const markFolder = folderHeader.createSpan({text:'✓'});
+            const markFolder = folderHeader.createSpan({text:'✓', cls: 'rss-mark-folder'});
             markFolder.style.cursor='pointer';
             markFolder.style.marginRight='6px';
             markFolder.setAttribute('title', t('mark_all_as_read'));
@@ -270,7 +270,7 @@ export default class ViewLoader extends ItemView {
                 feedInfo.style.flex = '1';
 
                 // Botón feed: marcar todos los items de este feed como leídos (✓)
-                const markFeedBtn = feedInfo.createSpan({text:'✓'});
+                const markFeedBtn = feedInfo.createSpan({text:'✓', cls:'rss-mark-feed'});
                 markFeedBtn.style.cursor='pointer';
                 markFeedBtn.style.marginRight='6px';
                 markFeedBtn.setAttribute('title', t('mark_all_as_read'));

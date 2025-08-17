@@ -252,6 +252,25 @@ ul[style*="margin-left"] {
     transition: all 0.2s ease;
 }
 
+/* Botón marcar carpeta */
+.rss-fr-subs .rss-folder-header .rss-mark-folder {
+    font-size: 12px;
+    background: var(--background-modifier-border);
+    color: var(--text-muted);
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    margin-right: 6px;
+    transition: background .15s ease, color .15s ease;
+}
+.rss-fr-subs .rss-folder-header .rss-mark-folder:hover {
+    background: var(--text-accent);
+    color: var(--text-on-accent);
+}
+
 .rss-fr-subs .rss-folder-header:hover { 
     background: var(--background-modifier-hover);
     border-color: var(--text-accent);
@@ -286,6 +305,32 @@ ul[style*="margin-left"] {
     margin-right: 8px;
     line-height: 1;
 }
+
+/* Botón marcar feed */
+.rss-fr-subs .rss-feed-header .rss-mark-feed {
+    font-size: 11px;
+    background: var(--background-modifier-border);
+    color: var(--text-faint);
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    margin-right: 6px;
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity .15s ease, background .15s ease, color .15s ease;
+}
+.rss-fr-subs .rss-feed-header:hover .rss-mark-feed { opacity: 1; }
+.rss-fr-subs .rss-feed-header .rss-mark-feed:hover { background: var(--text-accent); color: var(--text-on-accent); }
+
+/* Ajustar padding cuando hay botón mark-feed visible */
+.rss-fr-subs .rss-feed-header .rss-mark-feed + img,
+.rss-fr-subs .rss-feed-header .rss-mark-feed + span { margin-left: 18px; }
 
 .rss-fr-subs .rss-feed-header:hover:before {
     color: var(--text-accent);
