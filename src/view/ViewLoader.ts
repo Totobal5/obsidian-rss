@@ -222,28 +222,31 @@ export default class ViewLoader extends ItemView {
             const markFolder = folderHeader.createSpan({text:'✓', cls: 'rss-mark-folder'});
             markFolder.style.cursor='pointer';
             markFolder.style.marginRight='6px';
-            markFolder.setAttribute('title', t('mark_folder_as_read'));
-                const lbl = t('mark_folder_as_read');
-                markFolder.setAttribute('title', lbl);
-                markFolder.setAttribute('aria-label', lbl);
+            const folderLbl = t('mark_folder_as_read');
+            markFolder.setAttribute('title', folderLbl);
+            markFolder.setAttribute('aria-label', folderLbl);
             markFolder.onclick = async (ev) => {
                 ev.stopPropagation();
                 try {
                     // Marcar items de feeds visibles en memoria
+                    const affectedLinks: string[] = [];
                     for (const feed of folder.feeds()) {
                         const rawFeed = (feed as any).parsed;
                         const items = rawFeed?.items || (feed.items? feed.items(): []);
-                        for (const it of items) it.read = true;
+                        for (const it of items) { if (it && it.read !== true) { it.read = true; if (it.link) affectedLinks.push(it.link); } }
                     }
                     // Actualizar settings persistidos
                     for (const feedContent of (this.plugin.settings.items||[])) {
-                        if (feedContent.folder === folder.name() && Array.isArray(feedContent.items)) {
-                            for (const raw of feedContent.items) raw.read = true;
+                        if (feedContent && typeof feedContent.folder === 'string' && feedContent.folder.toLowerCase() === folder.name().toLowerCase() && Array.isArray(feedContent.items)) {
+                            for (const raw of feedContent.items) { if (raw.read !== true) { raw.read = true; if (raw.link) affectedLinks.push(raw.link); } }
                         }
                     }
                     await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                     try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'folder', name: folder.name()}})); } catch {}
+                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'folder', name: folder.name(), links: affectedLinks}})); } catch {}
+                    // Actualizar contador de la propia cabecera (optimista)
+                    const textNode = folderHeader.querySelector('span:nth-child(2)');
+                    if (textNode) textNode.textContent = `${folder.name()} (0)`;
                     this.refreshSidebarCounts();
                     if (folderHeader.hasClass && folderHeader.hasClass('active')) this.renderList(listPane, detailPane, folder.feeds());
                 } catch(err){ console.warn('Mark folder read failed', err); }
@@ -279,32 +282,35 @@ export default class ViewLoader extends ItemView {
                 feedInfo.style.flex = '1';
 
                 // Botón feed: marcar todos los items de este feed como leídos (✓)
-                const markFeedBtn = feedInfo.createSpan({text:'✓', cls:'rss-mark-feed'});
-                markFeedBtn.style.cursor='pointer';
-                markFeedBtn.style.marginRight='6px';
-                markFeedBtn.setAttribute('title', t('mark_feed_as_read'));
-                    const lbl = t('mark_feed_as_read');
-                    markFeedBtn.setAttribute('title', lbl);
-                    markFeedBtn.setAttribute('aria-label', lbl);
+        const markFeedBtn = feedInfo.createSpan({text:'✓', cls:'rss-mark-feed'});
+        markFeedBtn.style.cursor='pointer';
+        markFeedBtn.style.marginRight='6px';
+        const feedLbl = t('mark_feed_as_read');
+        markFeedBtn.setAttribute('title', feedLbl);
+        markFeedBtn.setAttribute('aria-label', feedLbl);
                 markFeedBtn.onclick = async (ev) => {
                     ev.stopPropagation();
                     try {
                         // Marcar items del feed en memoria (parsed o wrapper)
                         const rawFeed = (feed as any).parsed;
-                        const items = rawFeed?.items || (feed.items? feed.items(): []);
-                        for (const it of items) it.read = true;
+            const items = rawFeed?.items || (feed.items? feed.items(): []);
+            const affectedLinks: string[] = [];
+            for (const it of items) { if (it && it.read !== true) { it.read = true; if (it.link) affectedLinks.push(it.link); } }
                         // Actualizar settings persistidos para este feed
                         for (const feedContent of (this.plugin.settings.items||[])) {
                             // Identificar feed por nombre o por link
                             if (feedContent.name === feed.name() || feedContent.link === feed.link()) {
                                 if (Array.isArray(feedContent.items)) {
-                                    for (const raw of feedContent.items) raw.read = true;
+                    for (const raw of feedContent.items) { if (raw.read !== true) { raw.read = true; if (raw.link) affectedLinks.push(raw.link); } }
                                 }
                             }
                         }
                         await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                         try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'feed', name: feed.name()}})); } catch {}
+            try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'feed', name: feed.name(), links: affectedLinks}})); } catch {}
+            // Actualizar badge de este feed (optimista)
+            const badge = feedHeader.querySelector('.rss-item-count-badge');
+            if (badge) badge.textContent = '0';
                         this.refreshSidebarCounts();
                         // Si este feed está activo refrescar lista
                         if (feedHeader.hasClass && feedHeader.hasClass('active')) this.renderList(listPane, detailPane, [feed]);
