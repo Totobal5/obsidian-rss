@@ -8,7 +8,7 @@ interface FeedSpec { folder:string; name:string; items: RawItem[]; }
 function makePlugin(feeds: FeedSpec[]) {
   // settings.items groups by feed (legacy shape)
   const settingsItems: any[] = feeds.map(f => ({
-    subtitle:'', title:f.name, name:f.name, link:'', image:'', folder:f.folder, description:'', language:'', hash:'', items: f.items
+    subtitle:'', title:f.name, name:f.name, link:f.name, image:'', folder:f.folder, description:'', language:'', hash:'', items: f.items
   }));
   const plugin: any = {
     settings: { items: settingsItems },
@@ -24,7 +24,7 @@ function makePlugin(feeds: FeedSpec[]) {
         name: () => folder,
         feeds: () => list.map(fs => ({
           name: () => fs.name,
-          link: () => '',
+          link: () => fs.name,
           items: () => fs.items
         }))
       }));
@@ -88,5 +88,31 @@ describe('RssRoot mark-all actions', () => {
     expect(detail.scope).toBe('folder');
     expect(detail.name).toBe('F1');
     expect(detail.links.sort()).toEqual(['l1','l2']);
+  });
+
+  test('feed mark-all marks only that feed and emits FEED_MARK_FEED', async () => {
+    const now = new Date().toISOString();
+    const feeds = [
+      { folder:'F1', name:'Feed1', items:[ { link:'fa1', title:'A', read:false, favorite:false, pubDate:now, folder:'F1', feed:'Feed1' }, { link:'fa2', title:'B', read:false, favorite:false, pubDate:now, folder:'F1', feed:'Feed1' } ] },
+      { folder:'F1', name:'Feed2', items:[ { link:'fb1', title:'C', read:false, favorite:false, pubDate:now, folder:'F1', feed:'Feed2' } ] }
+    ];
+    const plugin = makePlugin(feeds);
+    const target = mount(plugin);
+    await new Promise(r=> setTimeout(r,0));
+    const feedEvents: any[] = [];
+    document.addEventListener(RSS_EVENTS.FEED_MARK_FEED as string, (e:any)=> feedEvents.push(e.detail));
+    // Click first feed's mark button (Feed1)
+    const feedButtons = target.querySelectorAll('.rss-feed-line .rss-mark-feed');
+    (feedButtons[0] as HTMLButtonElement).click();
+    await new Promise(r=> setTimeout(r,0));
+    const feed1Items = plugin.settings.items.filter((s:any)=> s.name==='Feed1').flatMap((s:any)=> s.items);
+    const feed2Items = plugin.settings.items.filter((s:any)=> s.name==='Feed2').flatMap((s:any)=> s.items);
+    expect(feed1Items.every((i:RawItem)=> i.read)).toBe(true);
+    expect(feed2Items.every((i:RawItem)=> i.read)).toBe(false);
+    expect(feedEvents.length).toBe(1);
+    const detail = feedEvents[0];
+    expect(detail.scope).toBe('feed');
+    expect(detail.name).toBe('Feed1');
+    expect(detail.links.sort()).toEqual(['fa1','fa2']);
   });
 });
