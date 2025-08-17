@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import FolderView from './FolderView.svelte';
   import type RssReaderPlugin from '../main';
   import { RSS_EVENTS } from '../events';
   import t from '../l10n/locale';
@@ -81,7 +82,10 @@
   dispatchCounts();
   }
 
-  function toggleFavorite(raw:any){ plugin.itemStateService.toggleFavorite(raw); }
+  function toggleFavorite(raw:any){
+    plugin.itemStateService.toggleFavorite(raw);
+    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED)); } catch {}
+  }
   function toggleRead(raw:any){ plugin.itemStateService.toggleRead(raw); }
 
   function openFavorites(){
@@ -94,7 +98,15 @@
   function openFolder(feeds: Feed[]){ setActiveFeeds(feeds); }
   function openFeed(feed: Feed){ setActiveFeeds([feed]); }
 
-  function unreadInFeed(feed: Feed){ return feed.items()?.filter((i:any)=> !i.read || !i.read())?.length || 0; }
+  function val(v:any){ try { return typeof v === 'function' ? v() : v; } catch { return v; } }
+  function unreadInFeed(feed: Feed){
+    let items: any[] = [];
+    try {
+      const raw = (feed as any).items;
+      if (typeof raw === 'function') items = raw(); else if (Array.isArray(raw)) items = raw; else items = [];
+    } catch { items = []; }
+    return items.filter(i=> !val(i.read)).length;
+  }
   function unreadInFolder(feeds: Feed[]){ return feeds.reduce((a,f)=> a + unreadInFeed(f),0); }
   function globalUnread(){ return plugin.counters?.globalUnread() ?? 0; }
 
@@ -113,56 +125,44 @@
 </script>
 
 <div class="rss-fr-layout">
-  <div class="rss-fr-subs">
-    <div class="rss-mark-all-global" on:click={markAllGlobal} title={t('mark_all_as_read')} aria-label={t('mark_all_as_read')}>
-      <span>✓</span><span>{t('mark_all_as_read')}</span>
-    </div>
-    <div class="rss-all-feeds-button {favoritesMode?'' : 'active'}" on:click={openAllFeeds}>
-      <span>🌐</span><span>All Feeds ({globalUnread()})</span>
-    </div>
-    <div class="rss-favorites-button {favoritesMode?'active':''}" on:click={openFavorites}>
-      <span>★</span><span>Favorites ({favoriteItems.length})</span>
-    </div>
-  {#each folders as folder (folder.name())}
-      <div class="rss-folder-header" on:click={() => openFolder(folder.feeds())}>
-        <span>▼</span>
-        <span>{folder.name()} ({unreadInFolder(folder.feeds())})</span>
-        <span class="rss-mark-folder" title={t('mark_all_as_read')} on:click|stopPropagation={() => markFolderAsRead(folder.name())}>✓</span>
-      </div>
-      <div>
-        {#each folder.feeds() as feed}
-          <div class="rss-feed-header" on:click={()=> openFeed(feed)}>
-            <div><span>{feed.name()}</span></div>
-            <span class="rss-item-count-badge">{unreadInFeed(feed)}</span>
-            <span class="rss-mark-feed" title={t('mark_feed_as_read')} on:click|stopPropagation={()=> markFeedAsRead(feed)}>✓</span>
-          </div>
-        {/each}
-      </div>
-    {/each}
-  </div>
+  <FolderView
+    {folders}
+    favoritesMode={favoritesMode}
+    favoriteCount={favoriteItems.length}
+    globalUnread={globalUnread()}
+    {unreadInFeed}
+    {unreadInFolder}
+    onMarkAllGlobal={markAllGlobal}
+    onMarkFolder={markFolderAsRead}
+    onMarkFeed={markFeedAsRead}
+    onOpenAllFeeds={openAllFeeds}
+    onOpenFavorites={openFavorites}
+    onOpenFolder={openFolder}
+    onOpenFeed={openFeed}
+  />
   <div class="rss-fr-list">
     {#if listItems.length === 0}
       <div class="rss-fr-empty">No items</div>
     {:else}
       {#each listItems as obj (obj.item.link)}
-        <div class="rss-fr-row rss-fr-row-article {obj.item.read ? 'read':'unread'}" data-link={obj.item.link} on:click={()=> onRowClick(obj.item)}>
-          <span class="rss-dot {obj.item.read ? 'read':''}" on:click|stopPropagation={()=> toggleRead(obj.item)}></span>
-          <span class="rss-fr-star {obj.item.favorite?'is-starred':''}" data-link={obj.item.link} on:click|stopPropagation={()=> toggleFavorite(obj.item)}>{obj.item.favorite?'★':'☆'}</span>
+        <div class="rss-fr-row rss-fr-row-article {obj.item.read ? 'read':'unread'}" role="button" tabindex="0" data-link={obj.item.link} on:click={()=> onRowClick(obj.item)} on:keydown={(e)=> (e.key==='Enter'||e.key===' ') && onRowClick(obj.item)}>
+          <button type="button" class="rss-dot {obj.item.read ? 'read':''}" on:click|stopPropagation={()=> toggleRead(obj.item)} aria-label={obj.item.read? 'Mark unread':'Mark read'}></button>
+          <button type="button" class="rss-fr-star {obj.item.favorite?'is-starred':''}" data-link={obj.item.link} on:click|stopPropagation={()=> toggleFavorite(obj.item)} aria-label={obj.item.favorite? 'Unfavorite':'Favorite'}>{obj.item.favorite?'★':'☆'}</button>
           <div class="rss-fr-main">
             <div class="rss-fr-feedline"><span class="rss-fr-feed">{obj.feed ? obj.feed.name(): (obj.item.feed||'')}</span></div>
-            <div class="rss-fr-top"><span class="rss-fr-title">{obj.item.title?.() || obj.item.title}</span></div>
-            <div class="rss-fr-desc">{obj.item.description?.() || obj.item.description || ''}</div>
+            <div class="rss-fr-top"><span class="rss-fr-title">{typeof obj.item.title === 'function' ? obj.item.title() : obj.item.title}</span></div>
+            <div class="rss-fr-desc">{typeof obj.item.description === 'function' ? obj.item.description() : obj.item.description || ''}</div>
           </div>
         </div>
       {/each}
     {/if}
   </div>
-  <div class="rss-fr-detail hidden" />
+  <div class="rss-fr-detail hidden"></div>
 </div>
 
 <style>
   .rss-fr-layout { display:flex; height:100%; }
-  .rss-fr-subs { width:240px; overflow-y:auto; }
+  /* subscriptions column now lives in FolderView */
   .rss-fr-list { flex:1; overflow-y:auto; }
   .rss-fr-row { padding:4px 8px; display:flex; gap:6px; cursor:pointer; }
   .rss-fr-row.unread { font-weight:600; }
@@ -170,9 +170,5 @@
   .rss-dot.read { opacity:0.25; }
   .rss-fr-star { width:16px; text-align:center; }
   .rss-fr-star.is-starred { color:gold; }
-  .rss-item-count-badge { background:#444; color:#fff; padding:0 4px; border-radius:8px; font-size:0.75em; }
-  .rss-mark-feed { margin-left:8px; cursor:pointer; }
-  .rss-folder-header, .rss-feed-header, .rss-all-feeds-button, .rss-favorites-button, .rss-mark-all-global { padding:4px 6px; cursor:pointer; display:flex; align-items:center; gap:4px; }
-  .rss-mark-folder { margin-left:auto; cursor:pointer; }
-  .rss-folder-header.active, .rss-feed-header.active, .rss-all-feeds-button.active, .rss-favorites-button.active { background:var(--background-modifier-hover); }
+  .rss-fr-row button { background:transparent; border:0; cursor:pointer; }
 </style>
