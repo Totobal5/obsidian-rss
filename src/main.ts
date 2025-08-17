@@ -1,10 +1,10 @@
 import {Notice, Plugin, WorkspaceLeaf} from 'obsidian';
-import {DEFAULT_SETTINGS, RssFeed, RssReaderSettings} from "./settings/settings";
+import {DEFAULT_SETTINGS} from "./settings/settings";
+import type {RssFeed, RssReaderSettings} from "./settings/settings";
 import ViewLoader from "./view/ViewLoader";
 import {
     configuredFeedsStore,
     feedsStore,
-    FilteredFolderContent,
     filteredItemsStore,
     filteredStore,
     foldedState,
@@ -13,13 +13,16 @@ import {
     sortedFeedsStore,
     tagsStore
 } from "./stores";
+import type { FilteredFolderContent } from './stores';
 import {VIEW_ID} from "./consts";
-import {getFeedItems, RssFeedContent, RssFeedItem} from "./parser/rssParser";
+import {getFeedItems} from "./parser/rssParser";
+import type { RssFeedContent, RssFeedItem } from "./parser/rssParser";
 import groupBy from "lodash.groupby";
 import mergeWith from "lodash.mergewith";
 import keyBy from "lodash.keyby";
 import values from "lodash.values";
-import {FilteredFolder, SortOrder} from "./modals/FilteredFolderModal";
+import {SortOrder} from "./modals/FilteredFolderModal";
+import type {FilteredFolder} from "./modals/FilteredFolderModal";
 import {Md5} from "ts-md5";
 import t from "./l10n/locale";
 import {RSSReaderSettingsTab} from "./settings/SettingsTab";

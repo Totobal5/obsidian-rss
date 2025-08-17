@@ -1,6 +1,6 @@
-import {Feed, FeedOrder} from "../Feed";
+import type {Feed, FeedOrder} from "../Feed";
 import {NextcloudFeedProvider} from "./NextcloudFeedProvider";
-import {Item} from "../Item";
+import type {Item} from "../Item";
 
 export class NextCloudFeed implements Feed {
 

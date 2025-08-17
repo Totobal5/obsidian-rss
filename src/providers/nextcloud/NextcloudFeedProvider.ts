@@ -1,9 +1,10 @@
-import {FeedProvider} from "../FeedProvider";
-import {Folder} from "../Folder";
-import {Feed} from "../Feed";
+import type {FeedProvider} from "../FeedProvider";
+import type {Folder} from "../Folder";
+import type {Feed} from "../Feed";
 import RssReaderPlugin from "../../main";
-import { requestUrl, RequestUrlResponse} from "obsidian";
-import {Item} from "../Item";
+import { requestUrl } from "obsidian";
+import type { RequestUrlResponse } from "obsidian";
+import type {Item} from "../Item";
 import {NextCloudItem} from "./NextCloudItem";
 import {NextCloudFeed} from "./NextCloudFeed";
 import {NextCloudFolder} from "./NextCloudFolder";
@@ -138,7 +139,8 @@ export class NextcloudFeedProvider implements FeedProvider {
         const feeds = await this.feeds();
         for(const folder of data.json.folders) {
             const folderFeeds = feeds.filter(feed => feed.folderId() === folder.id);
-            folders.push(new NextCloudFolder(this, folder, folderFeeds));
+            // NextCloudFolder currently expects (provider, folderData). If a third argument is later supported, adjust constructor.
+            folders.push(new NextCloudFolder(this, folder));
         }
         return folders;
     }

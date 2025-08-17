@@ -1,4 +1,4 @@
-import {FeedProvider} from "./FeedProvider";
+import type {FeedProvider} from "./FeedProvider";
 import RssReaderPlugin from "../main";
 
 export class Providers {

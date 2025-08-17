@@ -9,7 +9,7 @@ import RssReaderPlugin from "../main";
 import Action from "../actions/Action";
 import t from "../l10n/locale";
 import {copy, rssToMd} from "../functions";
-import {Item} from "../providers/Item";
+import type {Item} from "../providers/Item";
 import {pluginApi} from "@vanakat/plugin-api";
 import {RSS_EVENTS} from '../events';
 

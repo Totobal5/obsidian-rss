@@ -28,3 +28,6 @@ export interface Item {
     folder(): string;
     feed(): string;
 }
+
+// Runtime placeholder for ESM named import compatibility in tests
+export const Item = {} as Item;

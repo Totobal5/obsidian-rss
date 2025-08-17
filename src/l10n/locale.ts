@@ -10,7 +10,8 @@ import da from "./locales/da";
 import test from "./locales/test";
 
 /* istanbul ignore next */
-const locale = (window.moment) ? window.moment.locale() : "test";
+// Cast window to any to appease TypeScript when moment is absent in test env
+const locale = ((window as any).moment) ? (window as any).moment.locale() : "test";
 
 const localeMap: { [k: string]: Partial<typeof en> } = {
     en,

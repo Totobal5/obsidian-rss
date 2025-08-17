@@ -1,4 +1,4 @@
-import {RssFeed} from "../src/settings/settings";
+import type {RssFeed} from "../src/settings/settings";
 import {getFeedItems} from "../src/parser/rssParser";
 
 describe('invalid', () => {

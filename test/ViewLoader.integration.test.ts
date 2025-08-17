@@ -2,7 +2,7 @@ import ViewLoader from '../src/view/ViewLoader';
 import {WorkspaceLeaf} from 'obsidian';
 import {augment, setupGlobalDom, makePluginWithFeed} from './utils/dom';
 import {RSS_EVENTS} from '../src/events';
-jest.mock('@vanakat/plugin-api', () => ({ pluginApi: () => null }));
+jest.mock('@vanakat/plugin-api', () => ({ pluginApi: (): null => null }));
 
 class FakeLeaf extends (WorkspaceLeaf as any) {}
 

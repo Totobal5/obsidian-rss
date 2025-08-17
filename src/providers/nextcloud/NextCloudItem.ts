@@ -1,4 +1,4 @@
-import {Item} from "../Item";
+import type {Item} from "../Item";
 import {NextcloudFeedProvider} from "./NextcloudFeedProvider";
 
 export class NextCloudItem implements Item{

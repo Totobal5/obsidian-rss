@@ -1,6 +1,6 @@
 import {ItemModal} from '../src/modals/ItemModal';
 import Action from '../src/actions/Action';
-jest.mock('@vanakat/plugin-api', () => ({ pluginApi: () => null }));
+jest.mock('@vanakat/plugin-api', () => ({ pluginApi: (): null => null }));
 
 // Minimal DOM + plugin stubs
 class FakeApp { workspace:any = { getLeavesOfType: (): any[] => [] }; plugins:any = { plugins: {} }; }

@@ -1,4 +1,4 @@
-import {Feed} from "./Feed";
+import type {Feed} from "./Feed";
 
 export interface Folder {
     id(): number;

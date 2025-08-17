@@ -1,5 +1,6 @@
 import type RssReaderPlugin from '../main';
-import {getFeedItems, RssFeedContent} from '../parser/rssParser';
+import {getFeedItems} from '../parser/rssParser';
+import type {RssFeedContent} from '../parser/rssParser';
 import {LocalFeedProvider} from '../providers/local/LocalFeedProvider';
 import t from '../l10n/locale';
 import {Notice} from 'obsidian';

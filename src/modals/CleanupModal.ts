@@ -5,7 +5,7 @@ import {ArraySuggest} from "../view/ArraySuggest";
 import {get} from "svelte/store";
 import {folderStore} from "../stores";
 import {BaseModal} from "./BaseModal";
-import {RssFeedContent} from "../parser/rssParser";
+import type {RssFeedContent} from "../parser/rssParser";
 import sortBy from "lodash.sortby";
 import groupBy from "lodash.groupby";
 

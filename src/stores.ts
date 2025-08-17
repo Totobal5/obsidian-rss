@@ -1,8 +1,8 @@
 import {writable} from "svelte/store";
-import {DEFAULT_SETTINGS, RssFeed, RssReaderSettings} from "./settings/settings";
-import {RssFeedContent, RssFeedItem} from "./parser/rssParser";
-import Array from "obsidian";
-import {FilteredFolder} from "./modals/FilteredFolderModal";
+import {DEFAULT_SETTINGS} from "./settings/settings";
+import type {RssFeed, RssReaderSettings} from "./settings/settings";
+import type {RssFeedContent, RssFeedItem} from "./parser/rssParser";
+import type {FilteredFolder} from "./modals/FilteredFolderModal";
 
 export interface FeedItems {
     items: RssFeedItem[];

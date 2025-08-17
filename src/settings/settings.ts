@@ -1,5 +1,5 @@
-import {FilteredFolder} from "../modals/FilteredFolderModal";
-import {RssFeedContent} from "../parser/rssParser";
+import type {FilteredFolder} from "../modals/FilteredFolderModal";
+import type {RssFeedContent} from "../parser/rssParser";
 
 export interface RssFeed {
     name: string,

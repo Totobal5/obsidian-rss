@@ -1,4 +1,4 @@
-import {Item} from "./Item";
+import type {Item} from "./Item";
 
 export enum FeedOrder {
     DEFAULT,
@@ -20,3 +20,6 @@ export interface Feed {
     folderName(): string;
     items(): Item[];
 }
+
+// Provide a runtime no-op export to satisfy ESM named import when only types are used elsewhere
+// (No runtime export needed; all consumers should use `import type {Feed}`)

@@ -1,6 +1,6 @@
 import {Notice, SearchComponent, Setting, TextComponent} from "obsidian";
 import RssReaderPlugin from "../main";
-import {RssFeed} from "../settings/settings";
+import type {RssFeed} from "../settings/settings";
 import {getFeedItems} from "../parser/rssParser";
 import {isValidHttpUrl} from "../consts";
 import {BaseModal} from "./BaseModal";

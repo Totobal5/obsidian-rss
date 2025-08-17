@@ -1,7 +1,7 @@
-import {FeedProvider} from "../FeedProvider";
-import {Feed} from "../Feed";
-import {Folder} from "../Folder";
-import {Item} from "../Item";
+import type {FeedProvider} from "../FeedProvider";
+import type {Feed} from "../Feed";
+import type {Folder} from "../Folder";
+import type {Item} from "../Item";
 import RssReaderPlugin from "../../main";
 import {SettingsSection} from "../../settings/SettingsSection";
 import {LocalFeedSettings} from "./LocalFeedSettings";

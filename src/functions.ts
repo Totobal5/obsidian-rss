@@ -10,7 +10,7 @@ import {TextInputPrompt} from "./modals/TextInputPrompt";
 import {FILE_NAME_REGEX} from "./consts";
 import RssReaderPlugin from "./main";
 import t from "./l10n/locale";
-import {Item} from "./providers/Item";
+import type {Item} from "./providers/Item";
 
 export async function createNewNote(plugin: RssReaderPlugin, item: Item): Promise<void> {
     console.log("creating new note");

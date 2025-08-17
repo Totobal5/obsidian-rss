@@ -1,6 +1,7 @@
-import {Feed, FeedOrder} from "../Feed";
-import {Item} from "../Item";
-import {RssFeedContent} from "../../parser/rssParser";
+import type {Feed} from "../Feed";
+import {FeedOrder} from "../Feed";
+import type {Item} from "../Item";
+import type {RssFeedContent} from "../../parser/rssParser";
 import {LocalFeedItem} from "./LocalFeedItem";
 
 export class LocalFeed implements Feed {

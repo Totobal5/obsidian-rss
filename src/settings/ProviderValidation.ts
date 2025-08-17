@@ -1,5 +1,5 @@
 import {Setting} from "obsidian";
-import {FeedProvider} from "../providers/FeedProvider";
+import type {FeedProvider} from "../providers/FeedProvider";
 
 export class ProviderValidation {
     private readonly provider: FeedProvider;

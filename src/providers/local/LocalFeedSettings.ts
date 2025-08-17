@@ -8,10 +8,11 @@ import {CleanupModal} from "../../modals/CleanupModal";
 import RssReaderPlugin from "../../main";
 import sortBy from "lodash.sortby";
 import groupBy from "lodash.groupby";
-import {RssFeed} from "../../settings/settings";
+import type {RssFeed} from "../../settings/settings";
 import {Md5} from "ts-md5";
 import {MessageModal} from "../../modals/MessageModal";
-import {getFeedItems, RssFeedContent} from "../../parser/rssParser";
+import {getFeedItems} from "../../parser/rssParser";
+import type {RssFeedContent} from "../../parser/rssParser";
 
 export class LocalFeedSettings extends SettingsSection {
 

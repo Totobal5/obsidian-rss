@@ -1,6 +1,6 @@
-import {Feed} from "./Feed";
-import {Folder} from "./Folder";
-import {Item} from "./Item";
+import type {Feed} from "./Feed";
+import type {Folder} from "./Folder";
+import type {Item} from "./Item";
 import {SettingsSection} from "../settings/SettingsSection";
 
 export interface FeedProvider {

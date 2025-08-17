@@ -4,7 +4,7 @@
     import ItemTitle from "./ItemTitle.svelte";
     import {settingsStore} from "../stores";
     import MarkdownContent from "./MarkdownContent.svelte";
-    import {Item} from "../providers/Item";
+    import type {Item} from "../providers/Item";
 
     export let plugin: RssReaderPlugin = null;
     export let item: Item = null;

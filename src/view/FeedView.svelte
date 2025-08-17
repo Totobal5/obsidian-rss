@@ -7,8 +7,8 @@
     import {foldedState} from "../stores";
     import t from "../l10n/locale";
     import {TagModal} from "../modals/TagModal";
-    import {Feed} from "../providers/Feed";
-    import {Item} from "../providers/Item";
+    import type {Feed} from "../providers/Feed";
+    import type {Item} from "../providers/Item";
 
     export let feed: Feed = null;
     export let plugin: RssReaderPlugin;

@@ -3,7 +3,7 @@ import RssReaderPlugin from "../main";
 import {htmlToMarkdown, Notice} from "obsidian";
 import {TagModal} from "../modals/TagModal";
 import t from "../l10n/locale";
-import {Item} from "../providers/Item";
+import type {Item} from "../providers/Item";
 import {RSS_EVENTS} from '../events';
 
 export default class Action {

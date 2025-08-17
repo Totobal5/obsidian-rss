@@ -1,5 +1,5 @@
 import {request} from "obsidian";
-import {RssFeed} from "../settings/settings";
+import type {RssFeed} from "../settings/settings";
 import {Md5} from "ts-md5";
 
 /**

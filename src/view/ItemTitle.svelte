@@ -1,12 +1,12 @@
 <script lang="ts">
     import RssReaderPlugin from "../main";
-    import {RssFeedItem} from "../parser/rssParser";
+    import type {RssFeedItem} from "../parser/rssParser";
     import IconComponent from "./IconComponent.svelte";
     import {ItemModal} from "../modals/ItemModal";
     import {createNewNote, openInBrowser, pasteToNote} from "../functions";
     import {Menu} from "obsidian";
     import Action from "../actions/Action";
-    import {Item} from "../providers/Item";
+    import type {Item} from "../providers/Item";
 
     export let plugin: RssReaderPlugin = null;
     export let item: Item = null;

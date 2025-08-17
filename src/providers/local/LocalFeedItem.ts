@@ -1,5 +1,5 @@
-import {Item} from "../Item";
-import {RssFeedItem} from "../../parser/rssParser";
+import type {Item} from "../Item";
+import type {RssFeedItem} from "../../parser/rssParser";
 
 export class LocalFeedItem implements Item {
 

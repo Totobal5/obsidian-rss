@@ -1,6 +1,6 @@
 import type RssReaderPlugin from '../main';
-import {RssFeed} from '../settings/settings';
-import {RssFeedContent} from '../parser/rssParser';
+import type {RssFeed} from '../settings/settings';
+import type {RssFeedContent} from '../parser/rssParser';
 import {feedsStore, configuredFeedsStore, filteredStore, foldedState} from '../stores';
 
 export class SettingsManager {

@@ -1,7 +1,7 @@
 import {moment, SuggestModal} from "obsidian";
 import RssReaderPlugin from "../main";
 import {ItemModal} from "./ItemModal";
-import {Item} from "../providers/Item";
+import type {Item} from "../providers/Item";
 
 export class ArticleSuggestModal extends SuggestModal<Item> {
     protected readonly plugin: RssReaderPlugin;

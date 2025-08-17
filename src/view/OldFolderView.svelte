@@ -1,15 +1,16 @@
 <script lang="ts">
-    import {FilteredFolderContent, filteredItemsStore, foldedState, settingsStore, sortedFeedsStore} from "../stores";
+    import {filteredItemsStore, foldedState, settingsStore, sortedFeedsStore} from "../stores";
+    import type {FilteredFolderContent} from "../stores";
     import RssReaderPlugin from "../main";
     import IconComponent from "./IconComponent.svelte";
     import ItemView from "./ItemView.svelte";
     import FeedView from "./FeedView.svelte";
     import {Menu} from "obsidian";
     import Action from "../actions/Action";
-    import {RssFeedItem} from "../parser/rssParser";
+    import type {RssFeedItem} from "../parser/rssParser";
     import t from "../l10n/locale";
     import TopRowButtons from "./TopRowButtons.svelte";
-    import {Item} from "../providers/Item";
+    import type {Item} from "../providers/Item";
 
     export let plugin: RssReaderPlugin;
 

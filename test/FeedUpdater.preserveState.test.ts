@@ -10,7 +10,7 @@ class FakePlugin {
 
 // Mock rss parser getFeedItems to return same link with different title (simulate update)
 jest.mock('../src/parser/rssParser', () => ({
-  getFeedItems: async () => ({ name:'Feed1', folder:'', title:'TitleNew', description:'', image:'', link:'', items:[ { link:'a', title:'A UPDATED', read:false, favorite:false, created:false, visited:false, tags:[], highlights:[] } ] }),
+  getFeedItems: async (): Promise<any> => ({ name:'Feed1', folder:'', title:'TitleNew', description:'', image:'', link:'', items:[ { link:'a', title:'A UPDATED', read:false, favorite:false, created:false, visited:false, tags:[], highlights:[] } ] }),
 }));
 
 describe('FeedUpdater preserves item state', () => {

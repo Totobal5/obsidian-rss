@@ -1,5 +1,5 @@
-import {Folder} from "../Folder";
-import {Feed} from "../Feed";
+import type {Folder} from "../Folder";
+import type {Feed} from "../Feed";
 
 export class LocalFolder implements Folder {
 

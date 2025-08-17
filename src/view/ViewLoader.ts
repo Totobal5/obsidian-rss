@@ -3,7 +3,7 @@ import RssReaderPlugin from "../main";
 import {VIEW_ID} from "../consts";
 import t from "../l10n/locale";
 import {ItemModal} from "../modals/ItemModal";
-import {Feed} from "../providers/Feed";
+import type {Feed} from "../providers/Feed";
 import Action from "../actions/Action";
 import {RSS_EVENTS} from '../events';
 
@@ -61,12 +61,22 @@ export default class ViewLoader extends ItemView {
     }
 
     private async displayData() {
-    const displayStart = performance.now();
-    const dbg = (...args: any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...args); };
-    dbg("📊 Starting display data...");
-        
+        const dbg = (...args: any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...args); };
+        dbg('📊 Mounting Svelte root...');
         this.contentContainer.empty();
-        // crear layout root separado para que querySelector funcione y evitar mezclar clases
+        // Montar componente Svelte root (nueva UI)
+        try {
+            const mod = await import('./RssRoot.svelte');
+            const RssRoot: any = mod.default;
+            // Crear contenedor para Svelte
+            const host = this.contentContainer.createDiv({cls:'rss-svelte-host'});
+            new RssRoot({ target: host, props: { plugin: this.plugin } });
+            return; // Evitar render imperativo legacy
+        } catch(e){
+            console.warn('Falling back a legacy ViewLoader rendering (Svelte root failed)', e);
+        }
+        // Legacy path (temporal) - mantener mientras se valida Svelte
+        const displayStart = performance.now();
         this.layoutRoot = this.contentContainer.createDiv({cls: 'rss-fr-layout'});
         const root = this.layoutRoot;
 
@@ -257,7 +267,12 @@ export default class ViewLoader extends ItemView {
                     }
                     await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                     try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'folder', name: folder.name(), links: affectedLinks}})); } catch {}
+                    try { 
+                        // Legacy broad event
+                        document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'folder', name: folder.name(), links: affectedLinks}}));
+                        // New specific folder event
+                        if ((RSS_EVENTS as any).FEED_MARK_FOLDER) document.dispatchEvent(new CustomEvent((RSS_EVENTS as any).FEED_MARK_FOLDER, {detail:{scope:'folder', name: folder.name(), links: affectedLinks}}));
+                    } catch {}
                     // Actualizar contador de la propia cabecera (optimista)
                     const textNode = folderHeader.querySelector('span:nth-child(2)');
                     if (textNode) textNode.textContent = `${folder.name()} (0)`;
@@ -321,7 +336,12 @@ export default class ViewLoader extends ItemView {
                         }
                         await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                         try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-            try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'feed', name: feed.name(), links: affectedLinks}})); } catch {}
+            try { 
+                // Legacy broad event
+                document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'feed', name: feed.name(), links: affectedLinks}}));
+                // New specific feed event
+                if ((RSS_EVENTS as any).FEED_MARK_FEED) document.dispatchEvent(new CustomEvent((RSS_EVENTS as any).FEED_MARK_FEED, {detail:{scope:'feed', name: feed.name(), links: affectedLinks}}));
+            } catch {}
             // Actualizar badge de este feed (optimista)
             const badge = feedHeader.querySelector('.rss-item-count-badge');
             if (badge) badge.textContent = '0';

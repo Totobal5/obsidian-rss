@@ -1,8 +1,8 @@
 <script lang="ts">
     import RssReaderPlugin from "../main";
-    import {Item} from "../providers/Item";
-    import {Feed} from "../providers/Feed";
-    import {Folder} from "../providers/Folder";
+    import type {Item} from "../providers/Item";
+    import type {Feed} from "../providers/Feed";
+    import type {Folder} from "../providers/Folder";
     import FeedView from "./FeedView.svelte";
 
     export let plugin: RssReaderPlugin;

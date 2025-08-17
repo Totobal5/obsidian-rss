@@ -1,4 +1,4 @@
-import {RssFeed} from "../settings/settings";
+import type {RssFeed} from "../settings/settings";
 import groupBy from "lodash.groupby";
 
 export function generateOPML(feeds: RssFeed[]) : string {

@@ -1,4 +1,4 @@
-import {RssFeed} from "../settings/settings";
+import type {RssFeed} from "../settings/settings";
 
 export async function loadFeedsFromString(importData: string, defaultFolder: string): Promise<RssFeed[]> {
     const rawData = new window.DOMParser().parseFromString(importData, "text/xml");
