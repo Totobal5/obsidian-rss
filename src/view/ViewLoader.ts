@@ -599,31 +599,7 @@ export default class ViewLoader extends ItemView {
                 try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
             };
 
-            // Toggle read state by clicking the left dot
-            dot.onclick = async (e) => {
-                e.stopPropagation();
-                try {
-                    const raw = (item as any).item || item;
-                    const nowRead = !(raw.read === true || (item.read && item.read()));
-                    raw.read = nowRead;
-                    if (item.markRead) item.markRead(nowRead);
-                    row.toggleClass('unread', !nowRead);
-                    row.toggleClass('read', nowRead);
-                    dot.toggleClass('read', nowRead);
-            console.log(`🟢 Dot toggle: ${nowRead ? 'read' : 'unread'} -> ${raw.title}`);
-                    // Sync settings
-                    outer: for (const feedContent of this.plugin.settings.items) {
-                        if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                        for (const i of feedContent.items) {
-                            if (i.link === raw.link) { i.read = nowRead; break outer; }
-                        }
-                    }
-            await this.plugin.writeFeedContent(arr => arr);
-                    try { const localProvider: any = await this.plugin.providers.getById('local'); localProvider?.invalidateCache && localProvider.invalidateCache(); } catch {}
-                    refreshCounters();
-                    this.refreshSidebarCounts();
-                } catch(err) { console.warn('Toggle read failed', err); }
-            };
+            // (Dot click handled via delegated listener below using ItemStateService)
 
             // dataset for event delegation
             (row as any).dataset.action = 'open';
@@ -649,19 +625,19 @@ export default class ViewLoader extends ItemView {
                 return;
             }
             if (target.closest('.rss-dot')) {
+                e.stopPropagation();
                 const row = target.closest('.rss-fr-row-article') as HTMLElement;
                 const link = row?.dataset.link;
                 if (!link) return;
                 const raw = this.plugin.getItemByLink(link);
                 if (!raw) return;
-                raw.read = !raw.read;
-                row.toggleClass('read', raw.read);
-                row.toggleClass('unread', !raw.read);
-                target.classList.toggle('read', raw.read);
-                await this.plugin.writeFeedContentDebounced(()=>{}, 250);
-                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                this.refreshSidebarCounts();
-                e.stopPropagation();
+                try {
+                    const newState = await this.plugin.itemStateService.toggleRead(raw as any);
+                    row.toggleClass('read', newState);
+                    row.toggleClass('unread', !newState);
+                    target.classList.toggle('read', newState);
+                    this.refreshSidebarCounts();
+                } catch(err){ console.warn('Dot toggle failed', err); }
                 return;
             }
             const row = target.closest('.rss-fr-row-article') as HTMLElement;
@@ -720,8 +696,8 @@ export default class ViewLoader extends ItemView {
             for (const header of folderHeaders) {
                 const textNode = header.querySelector('span:nth-child(2)');
                 if (!textNode) continue;
-                const folderName = textNode.textContent?.replace(/ \(.*\)$/,'');
-                const unreadInFolder = settingsFeeds.filter((fc:any)=> fc.folder === folderName)
+                const folderName = textNode.textContent?.replace(/ \(.*\)$/,'')?.trim();
+                const unreadInFolder = settingsFeeds.filter((fc:any)=> fc.folder && folderName && fc.folder.toLowerCase() === folderName.toLowerCase())
                     .reduce((acc:number, fc:any)=> acc + fc.items.filter((i:any)=> i.read !== true).length, 0);
                 textNode.textContent = `${folderName} (${unreadInFolder})`;
             }
