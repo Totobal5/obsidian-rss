@@ -6,8 +6,7 @@ import {ImportModal} from "../../modals/ImportModal";
 import {generateOPML} from "../../parser/opmlExport";
 import {CleanupModal} from "../../modals/CleanupModal";
 import RssReaderPlugin from "../../main";
-import sortBy from "lodash.sortby";
-import groupBy from "lodash.groupby";
+// Removed lodash.sortBy/groupBy usage to reduce dependencies.
 import type {RssFeed} from "../../settings/settings";
 import {Md5} from "ts-md5";
 import {MessageModal} from "../../modals/MessageModal";
@@ -104,12 +103,18 @@ export class LocalFeedSettings extends SettingsSection {
 
         container.empty();
 
-        const sorted = sortBy(groupBy(plugin.settings.feeds, "folder"), function (o) {
-            return o[0].folder;
-        });
-        for (const [, feeds] of Object.entries(sorted)) {
-            for (const id in feeds) {
-                const feed = feeds[id];
+                const feedsArr: any[] = Array.isArray(plugin.settings.feeds) ? plugin.settings.feeds : [];
+                const grouped: Record<string, any[]> = {};
+                for (const f of feedsArr) {
+                    if (!f) continue;
+                    const key = (f.folder || '').toString();
+                    if (!grouped[key]) grouped[key] = [];
+                    grouped[key].push(f);
+                }
+                        const folderKeys = Object.keys(grouped).sort((a,b)=> a.localeCompare(b));
+                        for (const folderKey of folderKeys) {
+                            const feeds = grouped[folderKey];
+                            for (const feed of feeds) {
 
                 const setting = new Setting(container);
 
@@ -242,7 +247,7 @@ export class LocalFeedSettings extends SettingsSection {
                                 this.displayFeedList(plugin, container);
                             });
                     });
-            }
-        }
+                    }
+                }
     }
 }

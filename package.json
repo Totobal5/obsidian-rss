@@ -56,7 +56,6 @@
     "@popperjs/core": "^2.10.2",
     "@types/nunjucks": "^3.2.1",
     "@vanakat/plugin-api": "^0.1.1",
-    "jsdom-global": "^3.0.2",
     "lodash.groupby": "^4.6.0",
     "lodash.keyby": "^4.6.0",
     "lodash.mergewith": "^4.6.2",
@@ -65,7 +64,7 @@
     "nunjucks": "^3.2.4",
     "obsidian": "0.16.3",
     "svelte": "^5.38.1",
-    "ts-md5": "^1.2.10",
-    "ts-node": "^10.4.0"
+  "ts-md5": "^1.2.10"
+    
   }
 }

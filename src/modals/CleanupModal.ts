@@ -6,8 +6,7 @@ import {get} from "svelte/store";
 import {folderStore} from "../stores";
 import {BaseModal} from "./BaseModal";
 import type {RssFeedContent} from "../parser/rssParser";
-import sortBy from "lodash.sortby";
-import groupBy from "lodash.groupby";
+// Removed lodash.sortBy/groupBy usage to reduce dependencies.
 
 export class CleanupModal extends BaseModal {
 
@@ -100,16 +99,24 @@ export class CleanupModal extends BaseModal {
             .addDropdown(dropdown => {
                 dropdown.addOption("wallabag.xml-option-id", t("all"));
 
-                const sorted = sortBy(groupBy(this.plugin.settings.feeds, "folder"), function (o) {
-                    return o[0].folder;
-                });
-                for (const [, feeds] of Object.entries(sorted)) {
-                    for (const id in feeds) {
-                        const feed = feeds[id];
-                        dropdown.addOption(feed.folder + "-" + feed.name, feed.folder + " - " + feed.name);
-                    }
-                    dropdown.setValue(this.feed);
-                }
+                                // Native grouping by folder then sorting by folder name
+                                const feedsArr: any[] = Array.isArray(this.plugin.settings.feeds) ? this.plugin.settings.feeds : [];
+                                const grouped: Record<string, any[]> = {};
+                                for (const f of feedsArr) {
+                                    if (!f) continue;
+                                    const key = (f.folder || '').toString();
+                                    if (!grouped[key]) grouped[key] = [];
+                                    grouped[key].push(f);
+                                }
+                                const foldersSorted = Object.keys(grouped).sort((a,b)=> a.localeCompare(b));
+                                for (const folderKey of foldersSorted) {
+                                    const feeds = grouped[folderKey];
+                                    for (const feed of feeds) {
+                                        if (!feed) continue;
+                                        dropdown.addOption(feed.folder + '-' + feed.name, feed.folder + ' - ' + feed.name);
+                                    }
+                                }
+                                dropdown.setValue(this.feed);
                 dropdown.onChange(value => {
                     this.feed = value;
                 });
