@@ -37,8 +37,12 @@
       const collected: {feed: Feed, item: any}[] = [];
       for (const feed of activeFeeds) for (const it of feed.items()) collected.push({feed, item: it});
       collected.sort((a,b)=>{
-        const ad = (a.item as any).pubDateMs !== undefined ? (a.item as any).pubDateMs : new Date(a.item.pubDate?.() || a.item.pubDate || 0).getTime();
-        const bd = (b.item as any).pubDateMs !== undefined ? (b.item as any).pubDateMs : new Date(b.item.pubDate?.() || b.item.pubDate || 0).getTime();
+        const ad = (a.item as any).pubDateMs !== undefined
+          ? (a.item as any).pubDateMs
+          : new Date((()=>{ const pv = (a.item as any).pubDate; return typeof pv === 'function' ? pv() : pv; })() || 0).getTime();
+        const bd = (b.item as any).pubDateMs !== undefined
+          ? (b.item as any).pubDateMs
+          : new Date((()=>{ const pv = (b.item as any).pubDate; return typeof pv === 'function' ? pv() : pv; })() || 0).getTime();
         return bd - ad;
       });
       listItems = collected;
