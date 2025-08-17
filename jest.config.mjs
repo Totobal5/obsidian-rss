@@ -9,8 +9,8 @@ const config = {
     '^.+\\.ts$': [
       'ts-jest',
       {
-        useESM: true,
-        tsconfig: '<rootDir>/test/tsconfig.json'
+    useESM: true,
+    tsconfig: '<rootDir>/test/tsconfig.json'
       }
     ],
     '^.+\\.svelte$': [
@@ -18,9 +18,7 @@ const config = {
   { preprocess: true, compilerOptions: { generate: 'dom', compatibility: { componentApi: 4 } } }
     ]
   },
-  globals: {
-    'ts-jest': { useESM: true }
-  },
+  // Removed deprecated globals.ts-jest usage; config moved inline above
   moduleFileExtensions: ['ts','js','svelte','json'],
   collectCoverage: true,
   moduleDirectories: ['node_modules','src','test'],
