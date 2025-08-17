@@ -43,12 +43,43 @@ export class FeedUpdater {
     for (const newFeed of newFeeds) {
       const existingFeed = finalFeeds.find(f => f.name === newFeed.name && f.folder === newFeed.folder);
       if (!existingFeed) {
+        // Nuevo feed completo: simplemente agregar
         finalFeeds.push(newFeed);
       } else {
-        const existingLinks = new Set(existingFeed.items.map(i=> i.link));
-        const newItems = newFeed.items.filter(i=> !existingLinks.has(i.link));
-        if (newItems.length) existingFeed.items.push(...newItems);
-        existingFeed.title = newFeed.title; existingFeed.description = newFeed.description; existingFeed.image = newFeed.image; existingFeed.link = newFeed.link;
+        // Merge profundo por link preservando flags de usuario
+        const existingByLink = new Map(existingFeed.items.map(i => [i.link, i]));
+        const seen = new Set<string>();
+        const merged: any[] = [];
+        for (const fresh of newFeed.items) {
+          const old = existingByLink.get(fresh.link);
+          if (old) {
+            // Preservar estado del usuario sobre el item antiguo
+            const preserved = {
+              ...fresh, // metadatos recientes (title, description, etc)
+              read: old.read !== undefined ? old.read : fresh.read,
+              favorite: old.favorite !== undefined ? old.favorite : fresh.favorite,
+              created: old.created !== undefined ? old.created : fresh.created,
+              visited: old.visited !== undefined ? old.visited : fresh.visited,
+              tags: Array.isArray(old.tags) && old.tags.length ? old.tags : fresh.tags,
+              highlights: Array.isArray(old.highlights) && old.highlights.length ? old.highlights : fresh.highlights,
+            };
+            merged.push(preserved);
+          } else {
+            // Item nuevo -> conservar tal cual
+            merged.push(fresh);
+          }
+          seen.add(fresh.link);
+        }
+        // Mantener items antiguos que ya no vienen en el feed (para histórico)
+        for (const old of existingFeed.items) {
+          if (!seen.has(old.link)) merged.push(old);
+        }
+        existingFeed.items = merged;
+        // Actualizar metadatos de feed
+        existingFeed.title = newFeed.title;
+        existingFeed.description = newFeed.description;
+        existingFeed.image = newFeed.image;
+        existingFeed.link = newFeed.link;
       }
     }
 
