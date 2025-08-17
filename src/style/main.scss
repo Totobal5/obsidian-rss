@@ -342,6 +342,39 @@ ul[style*="margin-left"] {
     margin: 4px 0 8px 0; 
     border-radius: 8px;
     font-weight: 600;
+.rss-mark-all-global { 
+    padding: 6px 12px; 
+    margin: 0 0 4px 0; 
+    border-radius: 6px; 
+    background: var(--background-modifier-hover); 
+    color: var(--text-normal); 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    font-size: 12px; 
+    font-weight: 600; 
+    gap: 4px; 
+    transition: background .15s ease; 
+}
+.rss-mark-all-global:hover { background: var(--background-modifier-active-hover); }
+
+/* Botón marca individual dentro de la fila */
+.rss-fr-row-article .rss-item-mark-one { 
+    grid-column: 1; 
+    font-size: 10px; 
+    width: 14px; 
+    height: 14px; 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    background: var(--background-modifier-border); 
+    border-radius: 4px; 
+    margin-left: -4px; 
+    opacity: 0; 
+    transition: opacity .15s ease, background .15s ease; 
+}
+.rss-fr-row-article:hover .rss-item-mark-one { opacity: 1; }
+.rss-fr-row-article .rss-item-mark-one:hover { background: var(--text-accent); color: var(--text-on-accent); }
     color: var(--text-normal);
     cursor: pointer;
     display: flex;

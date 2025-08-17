@@ -87,7 +87,14 @@ export default class ViewLoader extends ItemView {
         }
         console.log(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
 
-    // Agregar botón "All Feeds" al principio
+    // Botón global (arriba) para marcar absolutamente todos como leídos
+    const markAllGlobal = subsPane.createDiv({cls:'rss-mark-all-global'});
+        const markAllGlobalIcon = markAllGlobal.createSpan();
+        setIcon(markAllGlobalIcon, 'check');
+        markAllGlobalIcon.style.marginRight='6px';
+        markAllGlobal.createSpan({text: t('mark_all_as_read')});
+
+    // Agregar botón "All Feeds" debajo
     const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
         const globeIcon = allFeedsButton.createSpan();
         setIcon(globeIcon, 'globe');
@@ -108,12 +115,6 @@ export default class ViewLoader extends ItemView {
             this.renderList(listPane, detailPane, globalFeedsList);
         };
 
-        // Botón global: marcar todos como leídos
-        const markAllGlobal = subsPane.createDiv({cls:'rss-mark-all-global'});
-        const markAllGlobalIcon = markAllGlobal.createSpan();
-        setIcon(markAllGlobalIcon, 'check');
-        markAllGlobalIcon.style.marginRight='6px';
-        markAllGlobal.createSpan({text: t('mark_all_as_read')});
         markAllGlobal.onclick = async () => {
             try {
                 for (const feedContent of (this.plugin.settings.items||[])) {
@@ -465,6 +466,29 @@ export default class ViewLoader extends ItemView {
             const row = createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
+            // Botón rápido para marcar solo este item (si ya está leído lo deja leído)
+            const quickMark = row.createSpan({cls:'rss-item-mark-one', text:'✓'});
+            quickMark.setAttribute('title', t('mark_all_as_read')); // reuse translation
+            quickMark.style.cursor='pointer';
+            quickMark.onclick = async (e) => {
+                e.stopPropagation();
+                try {
+                    const raw = (item as any).item || item;
+                    if (raw.read !== true) {
+                        raw.read = true;
+                        if (item.markRead) item.markRead(true);
+                        row.removeClass('unread'); row.addClass('read'); dot.addClass('read');
+                        // Persist
+                        outer: for (const feedContent of this.plugin.settings.items) {
+                            if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                            for (const i of feedContent.items) { if (i.link === raw.link) { i.read = true; break outer; } }
+                        }
+                        await this.plugin.writeFeedContentDebounced(()=>{}, 150);
+                        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                        this.refreshSidebarCounts();
+                    }
+                } catch(err){ console.warn('Quick mark item failed', err); }
+            };
             // Guardar link para sincronizar desde modal
             try { (row as any).dataset.link = (item.url ? item.url() : item.link) || ''; } catch {}
             
