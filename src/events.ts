@@ -2,7 +2,8 @@
 export const RSS_EVENTS = {
   FAVORITE_UPDATED: 'rss-reader-favorite-updated',
   ITEM_READ_UPDATED: 'rss-reader-item-read-updated',
-  UNREAD_COUNTS_CHANGED: 'rss-reader-read-updated'
+  UNREAD_COUNTS_CHANGED: 'rss-reader-read-updated',
+  FEED_MARK_ALL: 'rss-reader-feed-mark-all'
 } as const;
 
 export type RssEventName = typeof RSS_EVENTS[keyof typeof RSS_EVENTS];

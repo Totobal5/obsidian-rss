@@ -243,6 +243,7 @@ export default class ViewLoader extends ItemView {
                     }
                     await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                     try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'folder', name: folder.name()}})); } catch {}
                     this.refreshSidebarCounts();
                     if (folderHeader.hasClass && folderHeader.hasClass('active')) this.renderList(listPane, detailPane, folder.feeds());
                 } catch(err){ console.warn('Mark folder read failed', err); }
@@ -303,6 +304,7 @@ export default class ViewLoader extends ItemView {
                         }
                         await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                         try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FEED_MARK_ALL, {detail:{scope:'feed', name: feed.name()}})); } catch {}
                         this.refreshSidebarCounts();
                         // Si este feed está activo refrescar lista
                         if (feedHeader.hasClass && feedHeader.hasClass('active')) this.renderList(listPane, detailPane, [feed]);
@@ -476,32 +478,6 @@ export default class ViewLoader extends ItemView {
             const row = createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
-            // Botón rápido para marcar solo este item (si ya está leído lo deja leído)
-            const quickMark = row.createSpan({cls:'rss-item-mark-one', text:'✓'});
-            quickMark.setAttribute('title', t('mark_item_as_read'));
-                const lbl = t('mark_item_as_read');
-                quickMark.setAttribute('title', lbl);
-                quickMark.setAttribute('aria-label', lbl);
-            quickMark.style.cursor='pointer';
-            quickMark.onclick = async (e) => {
-                e.stopPropagation();
-                const raw = (item as any).item || item;
-                if (raw.read === true) return; // already read
-                try {
-                    raw.read = true;
-                    if (item.markRead) item.markRead(true);
-                    row.removeClass('unread'); row.addClass('read'); dot.addClass('read');
-                    // Persist only this item
-                    for (const feedContent of (this.plugin.settings.items||[])) {
-                        if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                        const found = feedContent.items.find((i:any)=> i.link === raw.link);
-                        if (found) { found.read = true; break; }
-                    }
-                    await this.plugin.writeFeedContentDebounced(()=>{}, 150);
-                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                    this.refreshSidebarCounts();
-                } catch(err){ console.warn('Quick mark item failed', err); }
-            };
             // Guardar link para sincronizar desde modal
             try { (row as any).dataset.link = (item.url ? item.url() : item.link) || ''; } catch {}
             
