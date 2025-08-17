@@ -265,6 +265,14 @@ export class ItemModal extends Modal {
             button.buttonEl.setAttribute("tabindex", "-1");
             button.buttonEl.addClass("rss-button");
         });
+
+        // autoMarkOnOpen: mark unread items as read immediately when modal opens
+        try {
+            const raw = (this.item as any).item || this.item;
+            if (this.plugin.settings.autoMarkOnOpen && !raw.read) {
+                await this.markAsRead();
+            }
+        } catch {}
         if(window['PluginApi']) {
             const tts = pluginApi("tts");
             if (tts) {

@@ -76,6 +76,26 @@ export class MiscSettings extends SettingsSection {
                         }));
                     });
             });
+
+        new Setting(this.contentEl)
+            .setName('Marcar como leído al abrir (autoMarkOnOpen)')
+            .setDesc('Marca automáticamente los artículos como leídos al abrir el modal')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.autoMarkOnOpen)
+                .onChange(async value => {
+                    await this.plugin.writeSettings(()=> ({ autoMarkOnOpen: value }));
+                })
+            );
+
+        new Setting(this.contentEl)
+            .setName('Debug logging')
+            .setDesc('Activa registros detallados en la consola (puede generar ruido)')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.debugLogging)
+                .onChange(async value => {
+                    await this.plugin.writeSettings(()=> ({ debugLogging: value }));
+                })
+            );
     }
 
 }

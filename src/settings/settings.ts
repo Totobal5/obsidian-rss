@@ -20,6 +20,8 @@ export interface RssReaderSettings {
     askForFilename: boolean,
     defaultFilename: string,
     autoSync: boolean,
+    autoMarkOnOpen: boolean,
+    debugLogging: boolean,
     displayStyle: string,
     hotkeys: {
         create: string,
@@ -92,6 +94,8 @@ export const DEFAULT_SETTINGS: RssReaderSettings = deepFreeze({
     askForFilename: false,
     defaultFilename: "{{title}}",
     autoSync: false,
+    autoMarkOnOpen: true,
+    debugLogging: false,
     hotkeys: {
         create: "n",
         paste: "v",

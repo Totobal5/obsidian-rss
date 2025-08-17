@@ -54,7 +54,7 @@ export default class RssReaderPlugin extends Plugin {
 
     async onload(): Promise<void> {
         const startTime = performance.now();
-        console.log('🚀 RSS Reader: Starting plugin load...');
+    console.log('🚀 RSS Reader: Starting plugin load...');
         //update settings object whenever store contents change.
         this.register(
             settingsStore.subscribe((value: RssReaderSettings) => {
@@ -101,6 +101,9 @@ export default class RssReaderPlugin extends Plugin {
                 await this.updateFeeds();
             }
         });
+
+    // Helper debug logger (minimal change point)
+    const dbg = (...args: any[]) => { if (this.settings?.debugLogging) console.log('[RSS][debug]', ...args); };
 
         this.addCommand({
             id: 'rss-cleanup',
