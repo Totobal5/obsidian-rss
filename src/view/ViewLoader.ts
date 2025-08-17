@@ -213,13 +213,10 @@ export default class ViewLoader extends ItemView {
             // Contar entradas totales en esta carpeta
             const folderItemCount = folder.feeds().reduce((total: number, feed: any) => total + (feed.items()?.filter((it:any)=> !it.read || !it.read())?.length || 0), 0);
             
-            const folderName = folderHeader.createSpan({text: `${folder.name()} (${folderItemCount})`});
-            folderName.style.flex = '1';
-
-            // Botón carpeta: marcar todos en carpeta como leídos (✓)
+            // Botón carpeta: marcar todos en carpeta como leídos (✓) - ahora a la izquierda del nombre
             const markFolder = folderHeader.createSpan({text:'✓'});
             markFolder.style.cursor='pointer';
-            markFolder.style.marginLeft='4px';
+            markFolder.style.marginRight='6px';
             markFolder.setAttribute('title', t('mark_all_as_read'));
             markFolder.onclick = async (ev) => {
                 ev.stopPropagation();
@@ -242,6 +239,9 @@ export default class ViewLoader extends ItemView {
                     if (folderHeader.hasClass && folderHeader.hasClass('active')) this.renderList(listPane, detailPane, folder.feeds());
                 } catch(err){ console.warn('Mark folder read failed', err); }
             };
+
+            const folderName = folderHeader.createSpan({text: `${folder.name()} (${folderItemCount})`});
+            folderName.style.flex = '1';
             
             const feedsWrap = subsPane.createDiv();
             let collapsed = false;
@@ -268,6 +268,35 @@ export default class ViewLoader extends ItemView {
                 feedInfo.style.display = 'flex';
                 feedInfo.style.alignItems = 'center';
                 feedInfo.style.flex = '1';
+
+                // Botón feed: marcar todos los items de este feed como leídos (✓)
+                const markFeedBtn = feedInfo.createSpan({text:'✓'});
+                markFeedBtn.style.cursor='pointer';
+                markFeedBtn.style.marginRight='6px';
+                markFeedBtn.setAttribute('title', t('mark_all_as_read'));
+                markFeedBtn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    try {
+                        // Marcar items del feed en memoria (parsed o wrapper)
+                        const rawFeed = (feed as any).parsed;
+                        const items = rawFeed?.items || (feed.items? feed.items(): []);
+                        for (const it of items) it.read = true;
+                        // Actualizar settings persistidos para este feed
+                        for (const feedContent of (this.plugin.settings.items||[])) {
+                            // Identificar feed por nombre o por link
+                            if (feedContent.name === feed.name() || feedContent.link === feed.link()) {
+                                if (Array.isArray(feedContent.items)) {
+                                    for (const raw of feedContent.items) raw.read = true;
+                                }
+                            }
+                        }
+                        await this.plugin.writeFeedContentDebounced(()=>{}, 250);
+                        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                        this.refreshSidebarCounts();
+                        // Si este feed está activo refrescar lista
+                        if (feedHeader.hasClass && feedHeader.hasClass('active')) this.renderList(listPane, detailPane, [feed]);
+                    } catch(err){ console.warn('Mark feed read failed', err); }
+                };
                 
                 if (feed.favicon()) {
                     const fav = feedInfo.createEl('img', {attr: {src: feed.favicon()}});
