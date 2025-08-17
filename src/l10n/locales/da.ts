@@ -12,7 +12,10 @@ export default {
     create_all: "Opret alle",
 
     //folder actions
-    mark_all_as_read: "Marker samtlige som læst",
+    mark_all_as_read: "Marker alt som læst (global)",
+    mark_folder_as_read: "Marker mappe som læst",
+    mark_feed_as_read: "Marker feed som læst",
+    mark_item_as_read: "Marker indlæg som læst",
     add_tags_to_all: "Tilføj tags til samtlige",
 
     filtered_folders: "Filtrerede mapper",

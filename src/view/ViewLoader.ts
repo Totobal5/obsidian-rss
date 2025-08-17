@@ -89,10 +89,11 @@ export default class ViewLoader extends ItemView {
 
     // Botón global (arriba) para marcar absolutamente todos como leídos
     const markAllGlobal = subsPane.createDiv({cls:'rss-mark-all-global'});
-        const markAllGlobalIcon = markAllGlobal.createSpan();
-        setIcon(markAllGlobalIcon, 'check');
+    const markAllGlobalIcon = markAllGlobal.createSpan();
+    setIcon(markAllGlobalIcon, 'check');
         markAllGlobalIcon.style.marginRight='6px';
-        markAllGlobal.createSpan({text: t('mark_all_as_read')});
+    markAllGlobal.createSpan({text: t('mark_all_as_read')});
+    markAllGlobal.setAttribute('title', t('mark_all_as_read'));
 
     // Agregar botón "All Feeds" debajo
     const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
@@ -218,7 +219,7 @@ export default class ViewLoader extends ItemView {
             const markFolder = folderHeader.createSpan({text:'✓', cls: 'rss-mark-folder'});
             markFolder.style.cursor='pointer';
             markFolder.style.marginRight='6px';
-            markFolder.setAttribute('title', t('mark_all_as_read'));
+            markFolder.setAttribute('title', t('mark_folder_as_read'));
             markFolder.onclick = async (ev) => {
                 ev.stopPropagation();
                 try {
@@ -274,7 +275,7 @@ export default class ViewLoader extends ItemView {
                 const markFeedBtn = feedInfo.createSpan({text:'✓', cls:'rss-mark-feed'});
                 markFeedBtn.style.cursor='pointer';
                 markFeedBtn.style.marginRight='6px';
-                markFeedBtn.setAttribute('title', t('mark_all_as_read'));
+                markFeedBtn.setAttribute('title', t('mark_feed_as_read'));
                 markFeedBtn.onclick = async (ev) => {
                     ev.stopPropagation();
                     try {
@@ -468,7 +469,7 @@ export default class ViewLoader extends ItemView {
             const dot = row.createSpan({cls: 'rss-dot'});
             // Botón rápido para marcar solo este item (si ya está leído lo deja leído)
             const quickMark = row.createSpan({cls:'rss-item-mark-one', text:'✓'});
-            quickMark.setAttribute('title', t('mark_all_as_read')); // reuse translation
+            quickMark.setAttribute('title', t('mark_item_as_read'));
             quickMark.style.cursor='pointer';
             quickMark.onclick = async (e) => {
                 e.stopPropagation();

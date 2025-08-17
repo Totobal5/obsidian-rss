@@ -12,7 +12,10 @@ export default {
     create_all: "Создать все",
 
     //folder actions
-    mark_all_as_read: "Пометить все прочитанным",
+    mark_all_as_read: "Отметить всё как прочитанное (глобально)",
+    mark_folder_as_read: "Отметить папку как прочитанную",
+    mark_feed_as_read: "Отметить ленту как прочитанную",
+    mark_item_as_read: "Отметить запись как прочитанную",
     add_tags_to_all: "Добавить теги ко всем записям",
 
     filtered_folders: "Отфильтрованная папка",

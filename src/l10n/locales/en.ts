@@ -12,7 +12,10 @@ export default {
     create_all: "Create all",
 
     //folder actions
-    mark_all_as_read: "Mark all as read",
+    mark_all_as_read: "Mark all as read", // global (everything)
+    mark_folder_as_read: "Mark folder as read",
+    mark_feed_as_read: "Mark feed as read",
+    mark_item_as_read: "Mark entry as read",
     add_tags_to_all: "Add tags to all entries",
 
     filtered_folders: "Filtered Folders",

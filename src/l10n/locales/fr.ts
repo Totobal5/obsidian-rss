@@ -12,7 +12,10 @@ export default {
     create_all: "Créer tous les articles",
 
     //folder actions
-    mark_all_as_read: "Marquer tous les articles comme lus",
+    mark_all_as_read: "Tout marquer comme lu (global)",
+    mark_folder_as_read: "Marquer le dossier comme lu",
+    mark_feed_as_read: "Marquer le flux comme lu",
+    mark_item_as_read: "Marquer l'entrée comme lue",
     add_tags_to_all: "Ajouter des mots-clés à tous les articles",
 
     filtered_folders: "Dossiers filtrés",

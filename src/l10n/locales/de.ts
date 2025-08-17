@@ -8,7 +8,10 @@ export default {
     create_all: "Alle erstellen",
 
     //folder actions
-    mark_all_as_read: "Alle als gelesen markieren",
+    mark_all_as_read: "Alles als gelesen markieren (global)",
+    mark_folder_as_read: "Ordner als gelesen markieren",
+    mark_feed_as_read: "Feed als gelesen markieren",
+    mark_item_as_read: "Eintrag als gelesen markieren",
     add_tags_to_all: "Tags zu allen hinzufügen",
 
     filtered_folders: "Gefilterte Ordner",

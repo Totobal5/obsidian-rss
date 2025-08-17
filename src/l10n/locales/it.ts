@@ -12,7 +12,10 @@ export default {
     create_all: "Crea tutti gli articoli",
 
     //folder actions
-    mark_all_as_read: "Segna tutti come letti",
+    mark_all_as_read: "Segna tutto come letto (globale)",
+    mark_folder_as_read: "Segna cartella come letta",
+    mark_feed_as_read: "Segna feed come letto",
+    mark_item_as_read: "Segna elemento come letto",
     add_tags_to_all: "Aggiungi tag a tutti gli articoli",
 
     filtered_folders: "Cartelle filtrate",

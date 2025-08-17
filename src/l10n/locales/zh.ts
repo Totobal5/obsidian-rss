@@ -8,7 +8,10 @@ export default {
     create_all: "创建全部",
 
     //folder actions
-    mark_all_as_read: "全部标记为已读",
+    mark_all_as_read: "全部标记为已读(全局)",
+    mark_folder_as_read: "将文件夹标记为已读",
+    mark_feed_as_read: "将订阅标记为已读",
+    mark_item_as_read: "将条目标记为已读",
     add_tags_to_all: "为所有条目添加标签",
 
     filtered_folders: "筛选分类",

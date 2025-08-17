@@ -12,7 +12,10 @@ export default {
     create_all: "Criar todos",
 
     //folder actions
-    mark_all_as_read: "Marcar todos como lidos",
+    mark_all_as_read: "Marcar tudo como lido (global)",
+    mark_folder_as_read: "Marcar pasta como lida",
+    mark_feed_as_read: "Marcar feed como lido",
+    mark_item_as_read: "Marcar item como lido",
     add_tags_to_all: "Adicionar tags para todos os artigos",
 
     filtered_folders: "Pastas filtradas",
