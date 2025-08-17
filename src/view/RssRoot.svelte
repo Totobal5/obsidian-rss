@@ -51,7 +51,7 @@
   }
 
   function refreshFavorites(rebuild = true){
-    favoriteItems = counters.favoriteItems();
+    favoriteItems = counters ? counters.favoriteItems() : [];
     if (favoritesMode && rebuild) rebuildList();
   }
 
@@ -112,9 +112,10 @@
     } catch { items = []; }
     return items.filter(i=> !val(i.read)).length;
   }
-  const counters = plugin.counters || new CountersService(plugin);
+  let counters: CountersService | undefined;
+  $: if (!counters && plugin) { counters = plugin.counters || new CountersService(plugin); }
   function unreadInFolder(feeds: Feed[]){ return feeds.reduce((a,f)=> a + unreadInFeed(f),0); }
-  function globalUnread(){ return counters.globalUnread(); }
+  function globalUnread(){ return counters ? counters.globalUnread() : 0; }
 
   function dispatchCounts(){ try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
     if (favoritesMode) refreshFavorites();
