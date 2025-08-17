@@ -39,6 +39,12 @@ export default class RssReaderPlugin extends Plugin {
     private itemByLink: Map<string, RssFeedItem> = new Map();
     private unreadCountByFeed: Map<string, number> = new Map();
     private feedContentSaveTimer: number | undefined;
+    // Services
+    settingsManager: any; // will be SettingsManager
+    feedUpdater: any; // FeedUpdater
+    itemStateService: any; // ItemStateService
+    counters: any; // CountersService
+    migrations: any; // MigrationService
 
     async onload(): Promise<void> {
         const startTime = performance.now();
@@ -55,7 +61,18 @@ export default class RssReaderPlugin extends Plugin {
         console.log(`⚙️  Settings loaded in ${(performance.now() - settingsStart).toFixed(2)}ms`);
         
         const providersStart = performance.now();
-        this.providers = new Providers(this);
+    this.providers = new Providers(this);
+    // Initialize services (lazy import style to avoid circular)
+    const {SettingsManager} = await import('./services/SettingsManager');
+    const {FeedUpdater} = await import('./services/FeedUpdater');
+    const {ItemStateService} = await import('./services/ItemStateService');
+    const {CountersService} = await import('./services/CountersService');
+    const {MigrationService} = await import('./services/MigrationService');
+    this.settingsManager = new SettingsManager(this);
+    this.feedUpdater = new FeedUpdater(this);
+    this.itemStateService = new ItemStateService(this);
+    this.counters = new CountersService(this);
+    this.migrations = new MigrationService(this);
         this.providers.register(new LocalFeedProvider(this));
         console.log(`🔌 Providers initialized in ${(performance.now() - providersStart).toFixed(2)}ms`);
 
@@ -346,95 +363,7 @@ export default class RssReaderPlugin extends Plugin {
         return items;
     }
 
-    async updateFeeds(): Promise<void> {
-        if (this.updating) {
-            console.log('⏳ updateFeeds skipped (already running)');
-            return;
-        }
-        this.updating = true;
-        this.updateAbort = new AbortController();
-        const updateStartTime = performance.now();
-        console.log("🔄 RSS Reader: Starting feed update...");
-
-        const fetchStart = performance.now();
-        // Fetch all feeds in parallel instead of sequentially
-        const timeout = (p: Promise<any>, ms: number) => new Promise((res, rej) => {
-            const to = setTimeout(()=> {rej(new Error('timeout'));}, ms);
-            p.then(v=>{clearTimeout(to); res(v);}, e=>{clearTimeout(to); rej(e);});
-        });
-        const feedPromises = this.settings.feeds.map(async (feed) => {
-            const feedStart = performance.now();
-            try {
-                const items = await timeout(getFeedItems(feed, {signal: this.updateAbort.signal}), 15000);
-                if (!items) return null; // invalid feed
-                console.log(`📡 Feed "${feed.name}" loaded in ${(performance.now() - feedStart).toFixed(2)}ms`);
-                return items;
-            } catch (error: any) {
-                if (error?.name === 'AbortError') {
-                    console.warn(`⛔ Feed fetch aborted: ${feed.name}`);
-                } else if (error?.message === 'timeout') {
-                    console.warn(`⏱️ Feed timed out: ${feed.name}`);
-                } else {
-                    console.error(`❌ Failed to load feed "${feed.name}":`, error);
-                }
-                return null;
-            }
-        });
-
-        const results = await Promise.all(feedPromises);
-        let newFeeds: RssFeedContent[] = results.filter(item => item) as RssFeedContent[];
-        console.log(`🌐 All feeds fetched in ${(performance.now() - fetchStart).toFixed(2)}ms`);
-
-        const mergeStart = performance.now();
-        const existingFeeds = this.settings.items || [];
-        
-        // SIMPLE APPROACH: Only add NEW items, don't touch existing ones
-        const finalFeeds: RssFeedContent[] = [...existingFeeds]; // Start with existing feeds
-        
-        for (const newFeed of newFeeds) {
-            // Find existing feed by name and folder
-            let existingFeed = finalFeeds.find(f => f.name === newFeed.name && f.folder === newFeed.folder);
-            
-            if (!existingFeed) {
-                // Feed doesn't exist, add it completely
-                finalFeeds.push(newFeed);
-                console.log(`➕ Added new feed: ${newFeed.name} (${newFeed.items.length} items)`);
-            } else {
-                // Feed exists, only add NEW items by comparing LINK
-                const existingLinks = new Set(existingFeed.items.map(item => item.link));
-                const newItems = newFeed.items.filter(item => !existingLinks.has(item.link));
-                
-                if (newItems.length > 0) {
-                    existingFeed.items.push(...newItems);
-                    console.log(`🆕 Added ${newItems.length} new items to feed: ${newFeed.name}`);
-                } else {
-                    console.log(`✅ No new items for feed: ${newFeed.name}`);
-                }
-                
-                // Update feed metadata but keep items intact
-                existingFeed.title = newFeed.title;
-                existingFeed.description = newFeed.description;
-                existingFeed.image = newFeed.image;
-                existingFeed.link = newFeed.link;
-            }
-        }
-        
-        console.log(`🔀 Simple merge completed in ${(performance.now() - mergeStart).toFixed(2)}ms`);
-        
-        const saveStart = performance.now();
-        new Notice(t("refreshed_feeds"));
-        await this.writeFeedContent(() => finalFeeds);
-        console.log(`💾 Feed content saved in ${(performance.now() - saveStart).toFixed(2)}ms`);
-        
-        // Invalidar cache del provider para que folders() use datos frescos
-        const localProvider = await this.providers.getById('local') as LocalFeedProvider;
-        if (localProvider && localProvider.invalidateCache) {
-            localProvider.invalidateCache();
-        }
-        
-    console.log(`✅ Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
-    this.updating = false;
-    }
+    async updateFeeds(): Promise<void> { await this.feedUpdater.updateFeeds(); }
 
     onunload(): void {
         console.log('unloading plugin rss reader');
@@ -628,27 +557,8 @@ export default class RssReaderPlugin extends Plugin {
         await this.updateFeeds();
     }
 
-    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
-        const currentItems = this.settings.items || [];
-        const updatedItems = changeOpts(currentItems);
-        
-        // Ensure we're always working with arrays
-        if (!Array.isArray(updatedItems)) {
-            console.error('🔍 writeFeedContent: changeOpts did not return an array:', updatedItems);
-            return;
-        }
-        
-        console.log('🔍 writeFeedContent: updating items array, length:', updatedItems.length);
-        
-        // Update the store with the new items array
-        await feedsStore.update(() => updatedItems);
-        
-        // Save to settings
-        await this.writeSettings((old) => ({
-            items: updatedItems
-        }));
-        this.rebuildIndexes();
-    }
+    // Deprecated: feed content writes delegated to settingsManager (kept for backward compatibility)
+    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> { return this.settingsManager.writeFeedContent(changeOpts); }
 
     // Debounced variant for frequent small mutations (read/favorite toggles)
     async writeFeedContentDebounced(mutator: (items: RssFeedContent[]) => void, delay = 250): Promise<void> {
@@ -666,7 +576,7 @@ export default class RssReaderPlugin extends Plugin {
         } catch (e) { console.warn('Debounced write failed', e); }
     }
 
-    private rebuildIndexes(): void {
+    rebuildIndexes(): void {
         this.itemByLink.clear();
         this.unreadCountByFeed.clear();
         for (const feedContent of (this.settings.items || [])) {
@@ -686,6 +596,11 @@ export default class RssReaderPlugin extends Plugin {
 
     getItemByLink(link: string): RssFeedItem | undefined { return this.itemByLink.get(link); }
     getUnreadCountForFeed(feedName: string): number { return this.unreadCountByFeed.get(feedName) || 0; }
+
+    // Internal write helper for services
+    async writeSettingsInternal(mut: (s: RssReaderSettings) => Partial<RssReaderSettings>): Promise<void> {
+        await this.writeSettings(old => ({...mut(old)}));
+    }
 
     async writeFiltered(changeOpts: (folders: FilteredFolder[]) => Partial<FilteredFolder[]>): Promise<void> {
         await filteredStore.update((old) => ({...old, ...changeOpts(old)}));
