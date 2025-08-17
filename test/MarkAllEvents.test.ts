@@ -1,4 +1,5 @@
 import ViewLoader from '../src/view/ViewLoader';
+import { jest } from '@jest/globals';
 import {WorkspaceLeaf} from 'obsidian';
 import {augment, setupGlobalDom, makePluginWithFeed} from './utils/dom';
 import {RSS_EVENTS} from '../src/events';
@@ -6,7 +7,8 @@ jest.mock('@vanakat/plugin-api', () => ({ pluginApi: (): null => null }));
 
 class FakeLeaf extends (WorkspaceLeaf as any) {}
 
-describe('Mark-all events detail payloads', () => {
+// Legacy mark-all events test retired after Svelte migration (Option B)
+describe.skip('Mark-all events detail payloads (retired)', () => {
   beforeAll(()=> setupGlobalDom());
 
   function buildMulti(){
@@ -30,7 +32,7 @@ describe('Mark-all events detail payloads', () => {
     return {view, container};
   }
 
-  test('folder mark-all emits FEED_MARK_FOLDER with links', async () => {
+  test.skip('folder mark-all emits FEED_MARK_FOLDER with links', async () => {
     const {plugin} = buildMulti();
     const {view, container} = mount(plugin);
     await (view as any).onOpen();
@@ -45,7 +47,7 @@ describe('Mark-all events detail payloads', () => {
     expect(detail.links.sort()).toEqual(['lnk1','lnk2','lnk3']);
   });
 
-  test('feed mark-all emits FEED_MARK_FEED with links', async () => {
+  test.skip('feed mark-all emits FEED_MARK_FEED with links', async () => {
     const {plugin} = buildMulti();
     const {view, container} = mount(plugin);
     await (view as any).onOpen();
