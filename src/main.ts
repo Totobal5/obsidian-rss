@@ -29,6 +29,12 @@ import {ArticleSuggestModal} from "./modals/ArticleSuggestModal";
 import {Providers} from "./providers/Providers";
 import {LocalFeedProvider} from "./providers/local/LocalFeedProvider";
 import {RSS_EVENTS} from './events';
+// Type-only imports for service properties (avoid circular eagerly loaded deps)
+import type {SettingsManager} from './services/SettingsManager';
+import type {FeedUpdater} from './services/FeedUpdater';
+import type {ItemStateService} from './services/ItemStateService';
+import type {CountersService} from './services/CountersService';
+import type {MigrationService} from './services/MigrationService';
 
 export default class RssReaderPlugin extends Plugin {
     settings: RssReaderSettings;
@@ -39,12 +45,12 @@ export default class RssReaderPlugin extends Plugin {
     private itemByLink: Map<string, RssFeedItem> = new Map();
     private unreadCountByFeed: Map<string, number> = new Map();
     private feedContentSaveTimer: number | undefined;
-    // Services
-    settingsManager: any; // will be SettingsManager
-    feedUpdater: any; // FeedUpdater
-    itemStateService: any; // ItemStateService
-    counters: any; // CountersService
-    migrations: any; // MigrationService
+    // Services (initialized lazily in onload)
+    settingsManager!: SettingsManager;
+    feedUpdater!: FeedUpdater;
+    itemStateService!: ItemStateService;
+    counters!: CountersService;
+    migrations!: MigrationService;
 
     async onload(): Promise<void> {
         const startTime = performance.now();

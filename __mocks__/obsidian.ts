@@ -109,3 +109,8 @@ export const MarkdownRenderer = {
         return Promise.resolve();
     }
 };
+
+// Icon helper stub
+export function setIcon(el: HTMLElement, icon: string){
+    if (el) el.setAttribute('data-icon', icon);
+}
