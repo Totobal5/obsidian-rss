@@ -228,16 +228,32 @@ export default class ViewLoader extends ItemView {
             markFolder.onclick = async (ev) => {
                 ev.stopPropagation();
                 try {
-                    // Marcar items de feeds visibles en memoria
                     const affectedLinks: string[] = [];
-                    for (const feed of folder.feeds()) {
-                        const rawFeed = (feed as any).parsed;
-                        const items = rawFeed?.items || (feed.items? feed.items(): []);
-                        for (const it of items) { if (it && it.read !== true) { it.read = true; if (it.link) affectedLinks.push(it.link); } }
+                    const folderNameLc = folder.name().toLowerCase();
+                    // Determinar feeds realmente pertenecientes a la carpeta usando settings (fuente de verdad)
+                    const allowedNames = new Set<string>();
+                    const allowedLinks = new Set<string>();
+                    for (const fc of (this.plugin.settings.items||[])) {
+                        if (!fc || typeof fc.folder !== 'string') continue;
+                        if (fc.folder.toLowerCase() === folderNameLc) {
+                            if (fc.name) allowedNames.add(fc.name);
+                            if (fc.link) allowedLinks.add(fc.link);
+                        }
                     }
-                    // Actualizar settings persistidos
+                    // Marcar sólo feeds cuyo name/link esté permitido (wrapper en memoria)
+                    for (const feed of folder.feeds()) {
+                        try {
+                            const fname = (feed.name && feed.name()) || '';
+                            const flink = (feed.link && feed.link()) || '';
+                            if (!allowedNames.has(fname) && !allowedLinks.has(flink)) continue; // skip feeds ajenos
+                            const rawFeed = (feed as any).parsed;
+                            const items = rawFeed?.items || (feed.items? feed.items(): []);
+                            for (const it of items) { if (it && it.read !== true) { it.read = true; if (it.link) affectedLinks.push(it.link); } }
+                        } catch {}
+                    }
+                    // Persistencia: sólo feeds de la carpeta
                     for (const feedContent of (this.plugin.settings.items||[])) {
-                        if (feedContent && typeof feedContent.folder === 'string' && feedContent.folder.toLowerCase() === folder.name().toLowerCase() && Array.isArray(feedContent.items)) {
+                        if (feedContent && typeof feedContent.folder === 'string' && feedContent.folder.toLowerCase() === folderNameLc && Array.isArray(feedContent.items)) {
                             for (const raw of feedContent.items) { if (raw.read !== true) { raw.read = true; if (raw.link) affectedLinks.push(raw.link); } }
                         }
                     }
