@@ -61,8 +61,9 @@ export default class ViewLoader extends ItemView {
     }
 
     private async displayData() {
-        const displayStart = performance.now();
-        console.log("📊 RSS View: Starting display data...");
+    const displayStart = performance.now();
+    const dbg = (...args: any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...args); };
+    dbg("📊 Starting display data...");
         
         this.contentContainer.empty();
         // crear layout root separado para que querySelector funcione y evitar mezclar clases
@@ -85,7 +86,7 @@ export default class ViewLoader extends ItemView {
             console.error("❌ Error loading folders:", error);
             folders = [];
         }
-        console.log(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
+    dbg(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
 
     // Botón global (arriba) para marcar absolutamente todos como leídos
     const markAllGlobal = subsPane.createDiv({cls:'rss-mark-all-global'});
@@ -137,12 +138,9 @@ export default class ViewLoader extends ItemView {
         setIcon(starIcon, 'star');
         starIcon.style.marginRight = '8px';
         
-        // Count favorites directly from persisted settings (single source of truth)
-        const persistedFavoriteCount = (this.plugin.settings.items || []).reduce((acc, feed) => {
-            if (!feed || !Array.isArray(feed.items)) return acc;
-            return acc + feed.items.filter(it => it.favorite === true).length;
-        }, 0);
-        console.log(`🔍 Found ${persistedFavoriteCount} persisted favorite items`);
+    // Count favorites via CountersService (single point)
+    const persistedFavoriteCount = this.plugin.counters?.favoriteCount() ?? 0;
+    dbg(`🔍 Found ${persistedFavoriteCount} persisted favorite items`);
         favoritesButton.createSpan({text: `Favorites (${persistedFavoriteCount})`});
         
         favoritesButton.onclick = () => {
@@ -158,7 +156,7 @@ export default class ViewLoader extends ItemView {
                     if (raw.favorite === true) currentFavoriteItems.push(raw);
                 }
             }
-            console.log(`🔍 Favorites button clicked: Found ${currentFavoriteItems.length} current favorite raw items`);
+            dbg(`🔍 Favorites button clicked: Found ${currentFavoriteItems.length} current favorite raw items`);
 
             // Crear feed temporal para favoritos (adaptar a interfaz mínima consumida por renderList)
             const favoritesFeed = {
@@ -445,7 +443,7 @@ export default class ViewLoader extends ItemView {
             } catch (e) { console.warn('FEED_MARK_ALL listener error', e); }
         }, {once:false});
         
-        console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
+    dbg(`📊 Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
 
     private async updateFavoritesCounter() {
@@ -463,7 +461,8 @@ export default class ViewLoader extends ItemView {
                 
                 // If favorites button is currently active, refresh the view
                 if (favoritesButton.hasClass('active')) {
-                    console.log(`🔍 Refreshing active favorites view with ${favoriteCount} items`);
+                    const dbg = (...a:any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...a); };
+                    dbg(`🔍 Refreshing active favorites view with ${favoriteCount} items`);
                     const listPane = this.containerEl.querySelector('.rss-fr-list') as HTMLElement;
                     const detailPane = this.containerEl.querySelector('.rss-fr-detail') as HTMLElement;
                     if (listPane && detailPane) {
@@ -485,7 +484,8 @@ export default class ViewLoader extends ItemView {
                 }
             }
             
-            console.log(`🔍 Updated favorites counter: ${favoriteCount} items`);
+            const dbg = (...a:any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...a); };
+            dbg(`🔍 Updated favorites counter: ${favoriteCount} items`);
         } catch (error) {
             console.error('Failed to update favorites counter:', error);
         }
@@ -685,7 +685,8 @@ export default class ViewLoader extends ItemView {
                 const feedName = nameEl.textContent || '';
                 badge.textContent = String(unreadByFeed[feedName] || 0);
             }
-            console.log('🔄 Sidebar unread counters refreshed (CountersService)');
+            const dbg2 = (...a:any[]) => { if (this.plugin.settings?.debugLogging) console.log('[RSS][view]', ...a); };
+            dbg2('🔄 Sidebar unread counters refreshed (CountersService)');
         } catch(err) { console.debug('Sidebar count refresh failed', err); }
     }
 
