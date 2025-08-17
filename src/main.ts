@@ -35,6 +35,10 @@ export default class RssReaderPlugin extends Plugin {
     providers: Providers;
     private updating = false;
     private updateAbort?: AbortController;
+    // Performance indexes
+    private itemByLink: Map<string, RssFeedItem> = new Map();
+    private unreadCountByFeed: Map<string, number> = new Map();
+    private feedContentSaveTimer: number | undefined;
 
     async onload(): Promise<void> {
         const startTime = performance.now();
@@ -609,6 +613,7 @@ export default class RssReaderPlugin extends Plugin {
         configuredFeedsStore.set(this.settings.feeds);
         feedsStore.set(this.settings.items);
         foldedState.set(this.settings.folded);
+    this.rebuildIndexes();
     }
 
     async saveSettings(): Promise<void> {
@@ -642,7 +647,45 @@ export default class RssReaderPlugin extends Plugin {
         await this.writeSettings((old) => ({
             items: updatedItems
         }));
+        this.rebuildIndexes();
     }
+
+    // Debounced variant for frequent small mutations (read/favorite toggles)
+    async writeFeedContentDebounced(mutator: (items: RssFeedContent[]) => void, delay = 250): Promise<void> {
+        try {
+            const items = this.settings.items || [];
+            mutator(items);
+            await feedsStore.update(() => items);
+            this.rebuildIndexes();
+            // Schedule single consolidated save
+            if (this.feedContentSaveTimer) window.clearTimeout(this.feedContentSaveTimer);
+            this.feedContentSaveTimer = window.setTimeout(async () => {
+                await this.writeSettings(old => ({ items }));
+                this.feedContentSaveTimer = undefined;
+            }, delay);
+        } catch (e) { console.warn('Debounced write failed', e); }
+    }
+
+    private rebuildIndexes(): void {
+        this.itemByLink.clear();
+        this.unreadCountByFeed.clear();
+        for (const feedContent of (this.settings.items || [])) {
+            if (!feedContent || !Array.isArray(feedContent.items)) continue;
+            let unread = 0;
+            for (const it of feedContent.items) {
+                if (it && it.link) this.itemByLink.set(it.link, it as any);
+                if (!it.read) unread++;
+                // Cache parsed timestamp once
+                if (it.pubDate && (it as any).pubDateMs === undefined) {
+                    (it as any).pubDateMs = Date.parse(it.pubDate) || 0;
+                }
+            }
+            this.unreadCountByFeed.set(feedContent.name, unread);
+        }
+    }
+
+    getItemByLink(link: string): RssFeedItem | undefined { return this.itemByLink.get(link); }
+    getUnreadCountForFeed(feedName: string): number { return this.unreadCountByFeed.get(feedName) || 0; }
 
     async writeFiltered(changeOpts: (folders: FilteredFolder[]) => Partial<FilteredFolder[]>): Promise<void> {
         await filteredStore.update((old) => ({...old, ...changeOpts(old)}));

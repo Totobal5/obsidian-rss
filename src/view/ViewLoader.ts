@@ -374,20 +374,21 @@ export default class ViewLoader extends ItemView {
         }
         // Parse date strings -> Date objects (fallback to epoch 0 when invalid to keep stable sort)
         collected.sort((a,b)=> {
-            const ad = new Date(a.item.pubDate?.() || a.item.pubDate || 0).getTime();
-            const bd = new Date(b.item.pubDate?.() || b.item.pubDate || 0).getTime();
+            const ad = (a.item as any).pubDateMs !== undefined ? (a.item as any).pubDateMs : new Date(a.item.pubDate?.() || a.item.pubDate || 0).getTime();
+            const bd = (b.item as any).pubDateMs !== undefined ? (b.item as any).pubDateMs : new Date(b.item.pubDate?.() || b.item.pubDate || 0).getTime();
             return bd - ad;
         });
         let currentGroup: string | null = null;
+        const frag = document.createDocumentFragment();
         for (const {feed, item} of collected) {
             const dateStrRaw = (typeof item.pubDate === 'function') ? item.pubDate() : item.pubDate; // Item interface returns string
             const dateObj = dateStrRaw ? new Date(dateStrRaw) : null;
             const groupLabel = dateObj ? this.groupLabel(dateObj) : 'Unknown';
             if (groupLabel !== currentGroup) {
                 currentGroup = groupLabel;
-                listPane.createDiv({cls: 'rss-fr-group-header', text: groupLabel});
+                frag.appendChild(createDiv({cls: 'rss-fr-group-header', text: groupLabel}));
             }
-            const row = listPane.createDiv({cls: 'rss-fr-row rss-fr-row-article'});
+            const row = createDiv({cls: 'rss-fr-row rss-fr-row-article'});
             if (!item.read || !item.read()) row.addClass('unread'); else row.addClass('read');
             const dot = row.createSpan({cls: 'rss-dot'});
             // Guardar link para sincronizar desde modal
@@ -397,45 +398,19 @@ export default class ViewLoader extends ItemView {
             const isCurrentlyStarred = item.favorite === true;
             const starEl = row.createSpan({cls: 'rss-fr-star', text: isCurrentlyStarred ? '★' : '☆'});
             try { (starEl as any).dataset.link = (item.url ? item.url() : item.link) || ''; } catch {}
-            if (isCurrentlyStarred) {
-                starEl.addClass('is-starred');
-            }
-            
-            starEl.onclick = async (e) => {
-                e.stopPropagation();
-                
-                console.log(`🔍 ViewLoader: Star clicked for item: "${item.title()}", current favorite: ${item.favorite}`);
-                
-                // Use the FAVORITE action for consistent behavior
-                await Action.FAVORITE.processor(this.plugin, item);
-                
-                // CRITICAL FIX: Access updated favorite state directly 
-                // The LocalFeedItem now has a favorite getter that reads the raw item
-                const isStarred = item.favorite === true;
-                starEl.setText(isStarred ? '★' : '☆');
-                starEl.toggleClass('is-starred', isStarred);
-                
-                console.log(`🔍 ViewLoader: Updated star UI, new favorite state: ${isStarred} (refreshed)`);
-                
-                // Update favorites counter immediately with raw data access
-                await this.updateFavoritesCounter();
-            };
+            if (isCurrentlyStarred) starEl.addClass('is-starred');
             // Thumbnail
-            let thumbUrl = '';
-            try { 
-                thumbUrl = (item.mediaThumbnail && item.mediaThumbnail()) || ''; 
-            } catch(error) {
-                console.debug('Failed to get media thumbnail:', error);
-            }
+            let thumbUrl = (item as any)._thumb || '';
             if (!thumbUrl) {
-                // fallback: search <img src> in description/body
-                try {
-                    const raw = (item.description && item.description()) || (item.body && item.body()) || '';
-                    const m = raw.match(/<img[^>]+src="([^"]+)"/i);
-                    if (m) thumbUrl = m[1];
-                } catch(error) {
-                    console.debug('Failed to extract image from content:', error);
+                try { thumbUrl = (item.mediaThumbnail && item.mediaThumbnail()) || ''; } catch {}
+                if (!thumbUrl) {
+                    try {
+                        const raw = (item.description && item.description()) || (item.body && item.body()) || '';
+                        const m = raw.match(/<img[^>]+src="([^"]+)"/i);
+                        if (m) thumbUrl = m[1];
+                    } catch {}
                 }
+                (item as any)._thumb = thumbUrl || ''; // cache
             }
             let hasThumb = false;
             if (thumbUrl) {
@@ -496,43 +471,56 @@ export default class ViewLoader extends ItemView {
                 } catch(err) { console.warn('Toggle read failed', err); }
             };
 
-            row.onclick = async () => {
-                const raw = (item as any).item || item;
-                let mutated = false;
-                try {
-                    if (!raw.read) {
-                        raw.read = true;
-                        if (item.markRead) item.markRead(true);
-                        row.removeClass('unread');
-                        row.addClass('read');
-                        dot.addClass('read');
-                        mutated = true;
-                    }
-                    // No visited flag anymore
-                    if (mutated) {
-                        // Sync inside settings by link
-                        outer: for (const feedContent of this.plugin.settings.items) {
-                            if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                            for (const i of feedContent.items) {
-                                if (i.link === raw.link) {
-                                    if (raw.read) i.read = true;
-                                    break outer;
-                                }
-                            }
-                        }
-            await this.plugin.writeFeedContent(arr => arr);
-                        try {
-                            const localProvider: any = await this.plugin.providers.getById('local');
-                            localProvider?.invalidateCache && localProvider.invalidateCache();
-                        } catch {}
-                    }
-                } catch(e) { console.warn('Read/visited sync failed', e); }
-        console.log('📖 Row click marked read for', raw.title);
-                refreshCounters();
-                this.refreshSidebarCounts();
-                new ItemModal(this.plugin, item, collected.map(c=>c.item), true).open();
-            };
+            // dataset for event delegation
+            (row as any).dataset.action = 'open';
+            frag.appendChild(row);
         }
+        listPane.appendChild(frag);
+
+        // Event delegation for star, dot, and row open
+        listPane.onclick = async (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('.rss-fr-star')) {
+                const star = target.closest('.rss-fr-star') as HTMLElement;
+                const link = star?.dataset.link;
+                if (!link) return;
+                const raw = this.plugin.getItemByLink(link);
+                if (!raw) return;
+                await Action.FAVORITE.processor(this.plugin as any, { item: raw, favorite: raw.favorite, title: ()=> raw.title, body: ()=> raw.content, markRead: ()=>{}, tags: ()=> raw.tags||[], setTags: (t:string[])=> raw.tags=t } as any);
+                const isStarred = raw.favorite === true;
+                star.setText(isStarred ? '★' : '☆');
+                star.toggleClass('is-starred', isStarred);
+                await this.updateFavoritesCounter();
+                e.stopPropagation();
+                return;
+            }
+            if (target.closest('.rss-dot')) {
+                const row = target.closest('.rss-fr-row-article') as HTMLElement;
+                const link = row?.dataset.link;
+                if (!link) return;
+                const raw = this.plugin.getItemByLink(link);
+                if (!raw) return;
+                raw.read = !raw.read;
+                row.toggleClass('read', raw.read);
+                row.toggleClass('unread', !raw.read);
+                target.classList.toggle('read', raw.read);
+                await this.plugin.writeFeedContentDebounced(()=>{}, 250);
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                this.refreshSidebarCounts();
+                e.stopPropagation();
+                return;
+            }
+            const row = target.closest('.rss-fr-row-article') as HTMLElement;
+            if (row && (row as any).dataset.link) {
+                const raw = this.plugin.getItemByLink((row as any).dataset.link);
+                if (!raw) return;
+                if (!raw.read) { raw.read = true; row.removeClass('unread'); row.addClass('read'); row.querySelector('.rss-dot')?.classList.add('read'); }
+                await this.plugin.writeFeedContentDebounced(()=>{}, 250);
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                this.refreshSidebarCounts();
+                new ItemModal(this.plugin, { item: raw, title: ()=> raw.title, body: ()=> raw.content, pubDate: ()=> raw.pubDate, description: ()=> raw.description, mediaThumbnail: ()=> raw.image, favorite: raw.favorite, read: ()=> raw.read, markRead: (v:boolean)=> raw.read=v, tags: ()=> raw.tags||[], setTags: (t:string[])=> raw.tags=t } as any, collected.map(c=>c.item), true).open();
+            }
+        };
     }
 
     private refreshSidebarCounts() {
