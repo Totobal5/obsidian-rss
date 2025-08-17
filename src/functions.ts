@@ -240,16 +240,19 @@ export function rssToMd(plugin: RssReaderPlugin, content: string): string {
     //wrap wallabag.xml codeblocks where there is a processor registered.
     //as codeblockProcessors is not exposed publicly(and seems to be only existent after v.13) do a check first
     //@ts-ignore
-    if (MarkdownPreviewRenderer.codeBlockPostProcessors) {
+    if (typeof MarkdownPreviewRenderer !== 'undefined' && MarkdownPreviewRenderer.codeBlockPostProcessors) {
         //@ts-ignore
         const codeblockProcessors: string[] = Object.keys(MarkdownPreviewRenderer.codeBlockPostProcessors);
         for (const codeblockProcessor of codeblockProcessors) {
             const regex = RegExp("^```" + codeblockProcessor + "\[\\s\\S\]*?```$", "gm");
             markdown = markdown.replace(regex, "<pre>$&</pre>");
         }
-    } else {
+    } else if (typeof MarkdownPreviewRenderer !== 'undefined') {
         //just remove wallabag.xml codeblocks instead
         markdown = markdown.replace(/^```.*\n([\s\S]*?)```$/gm, "<pre>$&</pre>");
+    } else {
+        // Test environment or no renderer: perform minimal sanitization only
+        markdown = markdown.replace(/<script[\s\S]*?<\/script>/gi,'');
     }
 
     if (!plugin.settings.displayMedia) {

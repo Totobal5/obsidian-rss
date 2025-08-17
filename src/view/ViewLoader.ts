@@ -518,7 +518,36 @@ export default class ViewLoader extends ItemView {
                 await this.plugin.writeFeedContentDebounced(()=>{}, 250);
                 try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
                 this.refreshSidebarCounts();
-                new ItemModal(this.plugin, { item: raw, title: ()=> raw.title, body: ()=> raw.content, pubDate: ()=> raw.pubDate, description: ()=> raw.description, mediaThumbnail: ()=> raw.image, favorite: raw.favorite, read: ()=> raw.read, markRead: (v:boolean)=> raw.read=v, tags: ()=> raw.tags||[], setTags: (t:string[])=> raw.tags=t } as any, collected.map(c=>c.item), true).open();
+                new ItemModal(this.plugin, {
+                    item: raw,
+                    id: () => (raw as any).id || raw.link || raw.title || '',
+                    guid: () => (raw as any).guid || raw.link || raw.title || '',
+                    guidHash: () => ((raw as any).guid || raw.link || raw.title || '').toString(),
+                    feedId: () => 0,
+                    feed: () => (raw as any).feed || '',
+                    folder: () => raw.folder || '',
+                    url: () => raw.link,
+                    title: () => raw.title,
+                    author: () => (raw as any).author || '',
+                    pubDate: () => raw.pubDate,
+                    body: () => raw.content,
+                    description: () => raw.description || '',
+                    mediaThumbnail: () => raw.image || '',
+                    mediaDescription: () => '',
+                    enclosureMime: () => (raw as any).enclosureMime || '',
+                    enclosureLink: () => (raw as any).enclosureLink || '',
+                    read: () => raw.read,
+                    starred: () => !!raw.favorite,
+                    rtl: () => false,
+                    markRead: (v: boolean) => { raw.read = v; },
+                    markStarred: (v: boolean) => { raw.favorite = v; },
+                    tags: () => raw.tags || [],
+                    setTags: (t: string[]) => { raw.tags = t; },
+                    created: () => true,
+                    markCreated: () => {},
+                    language: () => raw.language || 'en',
+                    highlights: () => raw.highlights || [],
+                } as any, collected.map(c=>c.item), true).open();
             }
         };
     }
