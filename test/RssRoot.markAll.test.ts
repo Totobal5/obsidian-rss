@@ -13,8 +13,8 @@ function makePlugin(feeds: FeedSpec[]) {
   const plugin: any = {
     settings: { items: settingsItems },
     counters: {
-      // Avoid Array.flatMap to stay within es2015 lib
-      favoriteItems: () => ([] as RawItem[]).concat.apply([], settingsItems.map(s => s.items.filter((i:RawItem)=> i.favorite))),
+  // Now using native flatMap (tsconfig target es2019)
+  favoriteItems: () => settingsItems.flatMap(s => s.items.filter((i:RawItem)=> i.favorite)),
       globalUnread: () => settingsItems.reduce((a,s)=> a + s.items.filter((i:RawItem)=> !i.read).length,0)
     },
     providers: { getCurrent: () => ({ folders: async () => {
