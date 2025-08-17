@@ -473,21 +473,21 @@ export default class ViewLoader extends ItemView {
             quickMark.style.cursor='pointer';
             quickMark.onclick = async (e) => {
                 e.stopPropagation();
+                const raw = (item as any).item || item;
+                if (raw.read === true) return; // already read
                 try {
-                    const raw = (item as any).item || item;
-                    if (raw.read !== true) {
-                        raw.read = true;
-                        if (item.markRead) item.markRead(true);
-                        row.removeClass('unread'); row.addClass('read'); dot.addClass('read');
-                        // Persist
-                        outer: for (const feedContent of this.plugin.settings.items) {
-                            if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                            for (const i of feedContent.items) { if (i.link === raw.link) { i.read = true; break outer; } }
-                        }
-                        await this.plugin.writeFeedContentDebounced(()=>{}, 150);
-                        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                        this.refreshSidebarCounts();
+                    raw.read = true;
+                    if (item.markRead) item.markRead(true);
+                    row.removeClass('unread'); row.addClass('read'); dot.addClass('read');
+                    // Persist only this item
+                    for (const feedContent of (this.plugin.settings.items||[])) {
+                        if (!feedContent || !Array.isArray(feedContent.items)) continue;
+                        const found = feedContent.items.find((i:any)=> i.link === raw.link);
+                        if (found) { found.read = true; break; }
                     }
+                    await this.plugin.writeFeedContentDebounced(()=>{}, 150);
+                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                    this.refreshSidebarCounts();
                 } catch(err){ console.warn('Quick mark item failed', err); }
             };
             // Guardar link para sincronizar desde modal
