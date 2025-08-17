@@ -93,7 +93,10 @@ export default class ViewLoader extends ItemView {
     setIcon(markAllGlobalIcon, 'check');
         markAllGlobalIcon.style.marginRight='6px';
     markAllGlobal.createSpan({text: t('mark_all_as_read')});
-    markAllGlobal.setAttribute('title', t('mark_all_as_read'));
+    // Tooltip + accesibilidad
+    const globalLabel = t('mark_all_as_read');
+    markAllGlobal.setAttribute('title', globalLabel);
+    markAllGlobal.setAttribute('aria-label', globalLabel);
 
     // Agregar botón "All Feeds" debajo
     const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
@@ -220,6 +223,9 @@ export default class ViewLoader extends ItemView {
             markFolder.style.cursor='pointer';
             markFolder.style.marginRight='6px';
             markFolder.setAttribute('title', t('mark_folder_as_read'));
+                const lbl = t('mark_folder_as_read');
+                markFolder.setAttribute('title', lbl);
+                markFolder.setAttribute('aria-label', lbl);
             markFolder.onclick = async (ev) => {
                 ev.stopPropagation();
                 try {
@@ -276,6 +282,9 @@ export default class ViewLoader extends ItemView {
                 markFeedBtn.style.cursor='pointer';
                 markFeedBtn.style.marginRight='6px';
                 markFeedBtn.setAttribute('title', t('mark_feed_as_read'));
+                    const lbl = t('mark_feed_as_read');
+                    markFeedBtn.setAttribute('title', lbl);
+                    markFeedBtn.setAttribute('aria-label', lbl);
                 markFeedBtn.onclick = async (ev) => {
                     ev.stopPropagation();
                     try {
@@ -470,6 +479,9 @@ export default class ViewLoader extends ItemView {
             // Botón rápido para marcar solo este item (si ya está leído lo deja leído)
             const quickMark = row.createSpan({cls:'rss-item-mark-one', text:'✓'});
             quickMark.setAttribute('title', t('mark_item_as_read'));
+                const lbl = t('mark_item_as_read');
+                quickMark.setAttribute('title', lbl);
+                quickMark.setAttribute('aria-label', lbl);
             quickMark.style.cursor='pointer';
             quickMark.onclick = async (e) => {
                 e.stopPropagation();
