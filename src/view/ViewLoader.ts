@@ -87,8 +87,8 @@ export default class ViewLoader extends ItemView {
         }
         console.log(`🗂️  Folders loaded in ${(performance.now() - providerStart).toFixed(2)}ms`);
 
-        // Agregar botón "All Feeds" al principio
-        const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
+    // Agregar botón "All Feeds" al principio
+    const allFeedsButton = subsPane.createDiv({cls: 'rss-all-feeds-button'});
         const globeIcon = allFeedsButton.createSpan();
         setIcon(globeIcon, 'globe');
         globeIcon.style.marginRight = '8px';
@@ -106,6 +106,24 @@ export default class ViewLoader extends ItemView {
             subsPane.querySelectorAll('.active').forEach(el => el.removeClass('active'));
             allFeedsButton.addClass('active');
             this.renderList(listPane, detailPane, globalFeedsList);
+        };
+
+        // Botón global: marcar todos como leídos
+        const markAllGlobal = subsPane.createDiv({cls:'rss-mark-all-global'});
+        const markAllGlobalIcon = markAllGlobal.createSpan();
+        setIcon(markAllGlobalIcon, 'check');
+        markAllGlobalIcon.style.marginRight='6px';
+        markAllGlobal.createSpan({text: t('mark_all_as_read')});
+        markAllGlobal.onclick = async () => {
+            try {
+                for (const feedContent of (this.plugin.settings.items||[])) {
+                    if (Array.isArray(feedContent.items)) for (const raw of feedContent.items) raw.read = true;
+                }
+                await this.plugin.writeFeedContentDebounced(()=>{}, 250);
+                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                this.refreshSidebarCounts();
+                if (allFeedsButton.hasClass && allFeedsButton.hasClass('active')) this.renderList(listPane, detailPane, globalFeedsList);
+            } catch(e){ console.warn('Mark all (global) failed', e); }
         };
 
         // Agregar categoría de Favoritos
@@ -186,7 +204,7 @@ export default class ViewLoader extends ItemView {
             this.renderList(listPane, detailPane, [favoritesFeed]);
         };
 
-        for (const folder of folders) {
+    for (const folder of folders) {
             const folderHeader = subsPane.createDiv({cls: 'rss-folder-header'});
             const triangle = folderHeader.createSpan();
             setIcon(triangle, 'down-triangle');
@@ -197,6 +215,33 @@ export default class ViewLoader extends ItemView {
             
             const folderName = folderHeader.createSpan({text: `${folder.name()} (${folderItemCount})`});
             folderName.style.flex = '1';
+
+            // Botón carpeta: marcar todos en carpeta como leídos (✓)
+            const markFolder = folderHeader.createSpan({text:'✓'});
+            markFolder.style.cursor='pointer';
+            markFolder.style.marginLeft='4px';
+            markFolder.setAttribute('title', t('mark_all_as_read'));
+            markFolder.onclick = async (ev) => {
+                ev.stopPropagation();
+                try {
+                    // Marcar items de feeds visibles en memoria
+                    for (const feed of folder.feeds()) {
+                        const rawFeed = (feed as any).parsed;
+                        const items = rawFeed?.items || (feed.items? feed.items(): []);
+                        for (const it of items) it.read = true;
+                    }
+                    // Actualizar settings persistidos
+                    for (const feedContent of (this.plugin.settings.items||[])) {
+                        if (feedContent.folder === folder.name() && Array.isArray(feedContent.items)) {
+                            for (const raw of feedContent.items) raw.read = true;
+                        }
+                    }
+                    await this.plugin.writeFeedContentDebounced(()=>{}, 250);
+                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+                    this.refreshSidebarCounts();
+                    if (folderHeader.hasClass && folderHeader.hasClass('active')) this.renderList(listPane, detailPane, folder.feeds());
+                } catch(err){ console.warn('Mark folder read failed', err); }
+            };
             
             const feedsWrap = subsPane.createDiv();
             let collapsed = false;
