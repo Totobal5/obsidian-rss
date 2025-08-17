@@ -14,7 +14,6 @@
   function val(v:any){ try { return typeof v === 'function' ? v() : v; } catch { return v; } }
   $: thumb = deriveThumb(item);
 </script>
-
 <div class="list-item-container {val(item.read) ? 'read' : 'unread'}"
      on:click={onClick} on:keydown={(e)=> (e.key==='Enter'||e.key===' ') && onClick()} role="button" tabindex="0" aria-label="Open item">
   <div class="list-item-indicators">
