@@ -358,23 +358,6 @@ ul[style*="margin-left"] {
 }
 .rss-mark-all-global:hover { background: var(--background-modifier-active-hover); }
 
-/* Botón marca individual dentro de la fila */
-.rss-fr-row-article .rss-item-mark-one { 
-    grid-column: 1; 
-    font-size: 10px; 
-    width: 14px; 
-    height: 14px; 
-    display: inline-flex; 
-    align-items: center; 
-    justify-content: center; 
-    background: var(--background-modifier-border); 
-    border-radius: 4px; 
-    margin-left: -4px; 
-    opacity: 0; 
-    transition: opacity .15s ease, background .15s ease; 
-}
-.rss-fr-row-article:hover .rss-item-mark-one { opacity: 1; }
-.rss-fr-row-article .rss-item-mark-one:hover { background: var(--text-accent); color: var(--text-on-accent); }
     color: var(--text-normal);
     cursor: pointer;
     display: flex;
@@ -430,12 +413,10 @@ ul[style*="margin-left"] {
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-/* Article rows now have an extra column for the quick mark button (✓) */
+/* Article row layout (dot | star | thumb? | main) */
 .rss-fr-row-article {
-    /* override to multi-line card style inside list */
     display: grid !important;
-    /* dot | quick | star | thumb | main */
-    grid-template-columns: 20px 16px 16px 72px 1fr;
+    grid-template-columns: 20px 16px 72px 1fr;
     align-items: flex-start;
     min-height: 60px;
     padding: 8px 12px;
@@ -443,19 +424,13 @@ ul[style*="margin-left"] {
 
 /* Layout optimizado para entradas sin imagen */
 /* No thumbnail => collapse thumb column */
-.rss-fr-row-article.no-thumbnail {
-    grid-template-columns: 20px 16px 16px 1fr !important;
-}
+.rss-fr-row-article.no-thumbnail { grid-template-columns: 20px 16px 1fr !important; }
 
 /* Layout para entradas con imagen */
-.rss-fr-row-article.has-thumbnail {
-    grid-template-columns: 20px 16px 16px 72px 1fr !important;
-}
+.rss-fr-row-article.has-thumbnail { grid-template-columns: 20px 16px 72px 1fr !important; }
 
 /* Fallback para navegadores que no soportan las clases específicas */
-.rss-fr-row-article:not(.has-thumbnail):not(.no-thumbnail) {
-    grid-template-columns: 20px 16px 16px 1fr !important;
-}
+.rss-fr-row-article:not(.has-thumbnail):not(.no-thumbnail) { grid-template-columns: 20px 16px 1fr !important; }
 
 /* Mejorar la apariencia del contenido sin imagen */
 .rss-fr-row-article.no-thumbnail .rss-fr-main {
@@ -559,20 +534,20 @@ ul[style*="margin-left"] {
 .rss-fr-row-article .rss-fr-top .rss-fr-date { font-size:11px; text-align:right; color:var(--text-faint); }
 .rss-fr-row-article .rss-fr-desc { font-size:12px; line-height:1.35; color:var(--text-muted); overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; line-clamp:3; -webkit-box-orient:vertical; }
 @media (min-width: 1200px){
-    .rss-fr-row-article.has-thumbnail { grid-template-columns: 20px 16px 16px 120px 1fr !important; }
+    .rss-fr-row-article.has-thumbnail { grid-template-columns: 20px 16px 120px 1fr !important; }
     .rss-fr-row-article img.rss-fr-thumb, .rss-fr-row-article .rss-fr-thumb-placeholder { width:120px; height:80px; }
     .rss-fr-row-article .rss-fr-top .rss-fr-title { font-size:15px; }
     .rss-fr-row-article .rss-fr-desc { -webkit-line-clamp:4; line-clamp:4; }
 }
 @media (max-width: 900px){
-    .rss-fr-row-article.has-thumbnail { grid-template-columns: 20px 16px 16px 56px 1fr !important; }
-    .rss-fr-row-article.no-thumbnail { grid-template-columns: 20px 16px 16px 1fr !important; }
+    .rss-fr-row-article.has-thumbnail { grid-template-columns: 20px 16px 56px 1fr !important; }
+    .rss-fr-row-article.no-thumbnail { grid-template-columns: 20px 16px 1fr !important; }
     .rss-fr-row-article img.rss-fr-thumb, .rss-fr-row-article .rss-fr-thumb-placeholder { width:56px; height:42px; }
     .rss-fr-row-article .rss-fr-top { grid-template-columns: minmax(80px,120px) 1fr 60px; }
 }
 @media (max-width: 620px){
-    .rss-fr-row-article.has-thumbnail { grid-template-columns: 14px 16px 16px 56px 1fr !important; }
-    .rss-fr-row-article.no-thumbnail { grid-template-columns: 14px 16px 16px 1fr !important; }
+    .rss-fr-row-article.has-thumbnail { grid-template-columns: 14px 16px 56px 1fr !important; }
+    .rss-fr-row-article.no-thumbnail { grid-template-columns: 14px 16px 1fr !important; }
     .rss-fr-row-article img.rss-fr-thumb, .rss-fr-row-article .rss-fr-thumb-placeholder { width:56px; height:42px; }
     .rss-fr-row-article .rss-fr-top { grid-template-columns: 1fr 60px; }
     .rss-fr-row-article .rss-fr-top .rss-fr-feed { display:none; }
