@@ -49,4 +49,41 @@ export class CountersService {
       .filter(f => f && typeof f.folder === 'string' && f.folder.trim().toLowerCase() === target)
       .reduce((acc, fc) => acc + this.unreadInFeedContent(fc), 0);
   }
+
+  /** Número total de favoritos. */
+  favoriteCount(): number {
+    return this.feeds().reduce((acc, fc: any) => acc + (Array.isArray(fc.items) ? fc.items.filter((i:any)=> i?.favorite === true).length : 0), 0);
+  }
+
+  /** Devuelve array plano de todos los items favoritos (RAW persistidos). */
+  favoriteItems(): any[] {
+    const out: any[] = [];
+    for (const fc of this.feeds()) {
+      if (Array.isArray(fc.items)) {
+        for (const it of fc.items) if (it?.favorite === true) out.push(it);
+      }
+    }
+    return out;
+  }
+
+  /** Mapa nombreFeed -> unread (una sola pasada). */
+  unreadByFeed(): Record<string, number> {
+    const map: Record<string, number> = {};
+    for (const fc of this.feeds()) {
+      if (!fc || !fc.name) continue;
+      map[fc.name] = (map[fc.name] || 0) + this.unreadInFeedContent(fc);
+    }
+    return map;
+  }
+
+  /** Mapa folder(lowercased) -> unread (para refrescos eficientes). */
+  unreadByFolder(): Record<string, number> {
+    const map: Record<string, number> = {};
+    for (const fc of this.feeds()) {
+      const folder = typeof fc.folder === 'string' ? fc.folder.trim().toLowerCase() : '';
+      if (!folder) continue;
+      map[folder] = (map[folder] || 0) + this.unreadInFeedContent(fc);
+    }
+    return map;
+  }
 }

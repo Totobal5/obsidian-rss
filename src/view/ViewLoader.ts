@@ -450,19 +450,8 @@ export default class ViewLoader extends ItemView {
 
     private async updateFavoritesCounter() {
         try {
-            const provider = this.plugin.providers.getCurrent();
-            const folders = await provider.folders();
-            // Count favorites directly from RAW data, not wrapper objects
-            let favoriteCount = 0;
-            for (const folder of folders) {
-                for (const feed of folder.feeds()) {
-                    // Access the raw parsed data directly
-                    const rawFeed = (feed as any).parsed;
-                    if (rawFeed && rawFeed.items) {
-                        favoriteCount += rawFeed.items.filter((rawItem: any) => rawItem.favorite === true).length;
-                    }
-                }
-            }
+            const favoriteCount = this.plugin.counters?.favoriteCount() ?? 0;
+            const favoriteItems = this.plugin.counters?.favoriteItems() ?? [];
             
             // Update favorites button text
             const favoritesButton = this.containerEl.querySelector('.rss-favorites-button');
@@ -475,22 +464,9 @@ export default class ViewLoader extends ItemView {
                 // If favorites button is currently active, refresh the view
                 if (favoritesButton.hasClass('active')) {
                     console.log(`🔍 Refreshing active favorites view with ${favoriteCount} items`);
-                    
-                    // Find the list and detail panes
                     const listPane = this.containerEl.querySelector('.rss-fr-list') as HTMLElement;
                     const detailPane = this.containerEl.querySelector('.rss-fr-detail') as HTMLElement;
-                    
                     if (listPane && detailPane) {
-                        // Collect actual favorite items for the view
-                        const favoriteItems: any[] = [];
-                        for (const folder of folders) {
-                            for (const feed of folder.feeds()) {
-                                const items = feed.items().filter((item: any) => item.favorite === true);
-                                favoriteItems.push(...items);
-                            }
-                        }
-                        
-                        // Create updated favorites feed
                         const favoritesFeed = {
                             id: () => -1,
                             url: () => '#favorites',
@@ -504,7 +480,6 @@ export default class ViewLoader extends ItemView {
                             folderName: () => 'Special',
                             items: () => favoriteItems
                         };
-                        
                         this.renderList(listPane, detailPane, [favoritesFeed]);
                     }
                 }
@@ -684,37 +659,33 @@ export default class ViewLoader extends ItemView {
 
     private refreshSidebarCounts() {
         try {
-            const settingsFeeds = this.plugin.settings.items || [];
-            // Global unread
-            const allUnread = settingsFeeds.reduce((acc: number, fc: any) => acc + (Array.isArray(fc.items) ? fc.items.filter((i:any)=> i.read !== true).length : 0), 0);
+            const counters = this.plugin.counters;
+            if (!counters) return;
+            const allUnread = counters.globalUnread();
             const allBtn = this.contentContainer.querySelector('.rss-all-feeds-button');
             const span = allBtn?.querySelector('span:last-child');
             if (span) span.textContent = `All Feeds (${allUnread})`;
 
-            // Folder headers
+            const unreadByFolder = counters.unreadByFolder();
             const folderHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-folder-header')) as HTMLElement[];
             for (const header of folderHeaders) {
                 const textNode = header.querySelector('span:nth-child(2)');
                 if (!textNode) continue;
-                const folderName = textNode.textContent?.replace(/ \(.*\)$/,'')?.trim();
-                const unreadInFolder = settingsFeeds.filter((fc:any)=> fc.folder && folderName && fc.folder.toLowerCase() === folderName.toLowerCase())
-                    .reduce((acc:number, fc:any)=> acc + fc.items.filter((i:any)=> i.read !== true).length, 0);
+                const folderName = textNode.textContent?.replace(/ \(.*\)$/,'')?.trim() || '';
+                const unreadInFolder = unreadByFolder[folderName.toLowerCase()] || 0;
                 textNode.textContent = `${folderName} (${unreadInFolder})`;
             }
 
-            // Feed badges
+            const unreadByFeed = counters.unreadByFeed();
             const feedHeaders = Array.from(this.contentContainer.querySelectorAll('.rss-feed-header')) as HTMLElement[];
             for (const fh of feedHeaders) {
                 const nameEl = fh.querySelector('div span');
                 const badge = fh.querySelector('.rss-item-count-badge');
                 if (!nameEl || !badge) continue;
-                const feedName = nameEl.textContent;
-                const unreadInFeed = settingsFeeds.filter((fc:any)=> fc.name === feedName)
-                    .reduce((acc:number, fc:any)=> acc + fc.items.filter((i:any)=> i.read !== true).length, 0);
-                badge.textContent = String(unreadInFeed);
+                const feedName = nameEl.textContent || '';
+                badge.textContent = String(unreadByFeed[feedName] || 0);
             }
-            // Optional console (can be silenced later)
-            console.log('🔄 Sidebar unread counters refreshed');
+            console.log('🔄 Sidebar unread counters refreshed (CountersService)');
         } catch(err) { console.debug('Sidebar count refresh failed', err); }
     }
 
