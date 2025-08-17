@@ -174,7 +174,8 @@ export default class RssReaderPlugin extends Plugin {
                     // 3. Volver a cargar feeds desde cero
                     await this.updateFeeds();
                     // 4. Despachar evento para refrescar contadores en la UI
-                    window.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
+                    // NOTE: use document.dispatchEvent for internal RSS events so ViewLoader listeners receive them.
+                    document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
                     new Notice('Entradas regeneradas');
                     console.log('✅ Regeneración completada correctamente');
                 } catch (e) {

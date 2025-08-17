@@ -399,6 +399,51 @@ export default class ViewLoader extends ItemView {
             }
             this.refreshSidebarCounts();
         }, {once:false});
+        // Listener para FEED_MARK_ALL (folder/feed) para asegurar refrescos de UI cuando se usan botones masivos
+        document.addEventListener(RSS_EVENTS.FEED_MARK_ALL, (ev: any) => {
+            try {
+                const scope = ev?.detail?.scope;
+                const name = ev?.detail?.name;
+                const links: string[] = ev?.detail?.links || [];
+                // Si no hay containerEl válido, solo refrescar contadores y salir
+                if (!this.containerEl || typeof (this.containerEl as any).querySelector !== 'function') {
+                    this.refreshSidebarCounts();
+                    return;
+                }
+                // Marcar filas visibles correspondientes como leídas sin re-render completo
+                if (Array.isArray(links) && links.length) {
+                    for (const ln of links) {
+                        if (!ln) continue;
+                        let sel = ln; try { sel = CSS.escape(ln); } catch {}
+                        const row = this.containerEl.querySelector(`.rss-fr-row-article[data-link="${sel}"]`);
+                        if (row) {
+                            row.classList.remove('unread');
+                            row.classList.add('read');
+                            const dot = row.querySelector('.rss-dot');
+                            if (dot) dot.classList.add('read');
+                        }
+                    }
+                }
+                // Si la vista actual corresponde al feed/carpeta afectada, refrescar lista para recomputar agrupaciones
+                const active = this.containerEl.querySelector('.rss-feed-header.active, .rss-folder-header.active, .rss-all-feeds-button.active');
+                if (active) {
+                    // Heurística: si estamos en la carpeta afectada o feed afectado, re-render parcial
+                    if (scope === 'feed' && active.textContent?.includes(name)) {
+                        // Re-render feed actual
+                        const listPane = this.containerEl.querySelector('.rss-fr-list') as HTMLElement;
+                        const detailPane = this.containerEl.querySelector('.rss-fr-detail') as HTMLElement;
+                        if (listPane && detailPane) {
+                            // For simplicity trigger full sidebar count refresh and let existing selection logic redraw
+                            this.refreshSidebarCounts();
+                        }
+                    } else if (scope === 'folder' && active.textContent?.includes(name)) {
+                        this.refreshSidebarCounts();
+                    }
+                } else {
+                    this.refreshSidebarCounts();
+                }
+            } catch (e) { console.warn('FEED_MARK_ALL listener error', e); }
+        }, {once:false});
         
         console.log(`📊 RSS View: Display completed in ${(performance.now() - displayStart).toFixed(2)}ms`);
     }
