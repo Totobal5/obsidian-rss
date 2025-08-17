@@ -15,7 +15,7 @@ const config = {
     ],
     '^.+\\.svelte$': [
       'svelte-jester',
-  { preprocess: true, compilerOptions: { generate: 'dom', compatibility: { componentApi: 4 } } }
+      { preprocess: true, compilerOptions: { generate: 'dom' } }
     ]
   },
   // Removed deprecated globals.ts-jest usage; config moved inline above

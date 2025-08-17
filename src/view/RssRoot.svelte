@@ -7,6 +7,8 @@
   import t from '../l10n/locale';
   import type { Feed } from '../providers/Feed';
   import type { Item } from '../providers/Item';
+  import { ItemModal } from '../modals/ItemModal';
+  import ListItem from './ListItem.svelte';
 
   export let plugin: RssReaderPlugin;
 
@@ -18,7 +20,8 @@
   let listItems: { feed: Feed|null, item: any }[] = [];
 
   const loadFolders = async () => {
-    try { folders = await plugin.providers.getCurrent().folders(); } catch { folders = []; }
+    if (!plugin || !plugin.providers || !plugin.providers.getCurrent) { folders = []; return; }
+    try { const current = plugin.providers.getCurrent(); if(current && current.folders) { folders = await current.folders(); } else { folders = []; } } catch { folders = []; }
     allFeeds = [];
     for (const f of folders) allFeeds.push(...f.feeds());
     if (!favoritesMode) setActiveFeeds(allFeeds);
@@ -31,21 +34,47 @@
     rebuildList();
   }
 
+  function firstImageFromHtml(html: string): string | undefined {
+    if (!html) return undefined;
+    try {
+      const m = html.match(/<img[^>]+src="([^"]+)"/i);
+      return m ? m[1] : undefined;
+    } catch { return undefined; }
+  }
+
+  function deriveThumb(it: any): string | undefined {
+    try {
+      if (it.image) return it.image;
+      if (typeof it.mediaThumbnail === 'function') { const v = it.mediaThumbnail(); if (v) return v; }
+      if (it.mediaThumbnail && typeof it.mediaThumbnail === 'string') return it.mediaThumbnail;
+      const html = typeof it.content === 'function' ? it.content() : it.content || it.description;
+      return firstImageFromHtml(html || '');
+    } catch { return undefined; }
+  }
+
   function rebuildList() {
     if (favoritesMode) {
-      listItems = favoriteItems.map(it => ({ feed: null, item: it }));
+      listItems = favoriteItems.map(it => ({ feed: null as Feed | null, item: it }));
     } else {
       const collected: {feed: Feed, item: any}[] = [];
-      for (const feed of activeFeeds) for (const it of feed.items()) collected.push({feed, item: it});
-      collected.sort((a,b)=>{
-        const ad = (a.item as any).pubDateMs !== undefined
-          ? (a.item as any).pubDateMs
-          : new Date((()=>{ const pv = (a.item as any).pubDate; return typeof pv === 'function' ? pv() : pv; })() || 0).getTime();
-        const bd = (b.item as any).pubDateMs !== undefined
-          ? (b.item as any).pubDateMs
-          : new Date((()=>{ const pv = (b.item as any).pubDate; return typeof pv === 'function' ? pv() : pv; })() || 0).getTime();
-        return bd - ad;
-      });
+      for (const feed of activeFeeds) {
+        let arr: any[] = [];
+        try { arr = feed.items?.() || feed.items?.() === 0 ? feed.items() : feed.items(); } catch { try { arr = feed.items?.() ?? []; } catch { arr = []; } }
+        if (!Array.isArray(arr)) continue;
+        for (const it of arr) if (it) collected.push({feed, item: it});
+      }
+      const extractDate = (obj: {item:any}|undefined) => {
+        try {
+          if (!obj || !obj.item) return 0;
+          const itm: any = obj.item;
+          if (itm.pubDateMs !== undefined && typeof itm.pubDateMs === 'number') return itm.pubDateMs;
+            const pv = itm.pubDate;
+            const raw = typeof pv === 'function' ? pv() : pv;
+            const d = raw ? new Date(raw) : undefined;
+            return d && !isNaN(d.getTime()) ? d.getTime() : 0;
+        } catch { return 0; }
+      };
+      collected.sort((a,b)=> extractDate(b) - extractDate(a));
       listItems = collected;
     }
   }
@@ -122,9 +151,36 @@
     rebuildList();
   }
 
-  function onRowClick(raw:any){ if(!raw.read){ toggleRead(raw); } }
+  function openItem(raw:any){
+    try { new ItemModal(plugin, raw, listItems.map(li=>li.item)).open(); } catch {}
+  }
+  function onRowClick(raw:any){
+    if(!raw.read){ toggleRead(raw); }
+    openItem(raw);
+  }
+
+  // UTIL: plain-text resumen sin imágenes para la lista
+  function stripHtml(str:string){
+    try { return str
+      .replace(/<style[\s\S]*?<\/style>/gi,'')
+      .replace(/<script[\s\S]*?<\/script>/gi,'')
+      .replace(/<img[^>]*>/gi,' ')
+      .replace(/<figure[\s\S]*?<\/figure>/gi,' ')
+      .replace(/<[^>]+>/g,' ') // tags
+      .replace(/&nbsp;/gi,' ')
+      .replace(/&amp;/gi,'&')
+      .replace(/\s+/g,' ')
+      .trim(); } catch { return str; }
+  }
+  function summary(it:any){
+    const raw = typeof it.description === 'function' ? it.description() : it.description || '';
+    const txt = stripHtml(raw);
+    return txt.length>280 ? txt.slice(0,277)+'…' : txt;
+  }
 
   onMount(async ()=> {
+    // Defer to next microtask to ensure plugin prop fully bound
+    await Promise.resolve();
     await loadFolders();
     document.addEventListener(RSS_EVENTS.UNREAD_COUNTS_CHANGED, ()=> { rebuildList(); }, { passive:true });
     document.addEventListener(RSS_EVENTS.FAVORITE_UPDATED, ()=> { refreshFavorites(); }, { passive:true });
@@ -152,15 +208,15 @@
       <div class="rss-fr-empty">No items</div>
     {:else}
       {#each listItems as obj (obj.item.link)}
-        <div class="rss-fr-row rss-fr-row-article {obj.item.read ? 'read':'unread'}" role="button" tabindex="0" data-link={obj.item.link} on:click={()=> onRowClick(obj.item)} on:keydown={(e)=> (e.key==='Enter'||e.key===' ') && onRowClick(obj.item)}>
-          <button type="button" class="rss-dot {obj.item.read ? 'read':''}" on:click|stopPropagation={()=> toggleRead(obj.item)} aria-label={obj.item.read? 'Mark unread':'Mark read'}></button>
-          <button type="button" class="rss-fr-star {obj.item.favorite?'is-starred':''}" data-link={obj.item.link} on:click|stopPropagation={()=> toggleFavorite(obj.item)} aria-label={obj.item.favorite? 'Unfavorite':'Favorite'}>{obj.item.favorite?'★':'☆'}</button>
-          <div class="rss-fr-main">
-            <div class="rss-fr-feedline"><span class="rss-fr-feed">{obj.feed ? obj.feed.name(): (obj.item.feed||'')}</span></div>
-            <div class="rss-fr-top"><span class="rss-fr-title">{typeof obj.item.title === 'function' ? obj.item.title() : obj.item.title}</span></div>
-            <div class="rss-fr-desc">{typeof obj.item.description === 'function' ? obj.item.description() : obj.item.description || ''}</div>
-          </div>
-        </div>
+        <ListItem
+          feed={obj.feed}
+          item={obj.item}
+          {deriveThumb}
+          {summary}
+          {toggleRead}
+          {toggleFavorite}
+          onOpen={openItem}
+        />
       {/each}
     {/if}
   </div>
@@ -168,14 +224,5 @@
 </div>
 
 <style>
-  .rss-fr-layout { display:flex; height:100%; }
-  /* subscriptions column now lives in FolderView */
-  .rss-fr-list { flex:1; overflow-y:auto; }
-  .rss-fr-row { padding:4px 8px; display:flex; gap:6px; cursor:pointer; }
-  .rss-fr-row.unread { font-weight:600; }
-  .rss-dot { width:10px; height:10px; border-radius:50%; background:var(--interactive-accent); display:inline-block; margin-top:6px; }
-  .rss-dot.read { opacity:0.25; }
-  .rss-fr-star { width:16px; text-align:center; }
-  .rss-fr-star.is-starred { color:gold; }
-  .rss-fr-row button { background:transparent; border:0; cursor:pointer; }
+
 </style>

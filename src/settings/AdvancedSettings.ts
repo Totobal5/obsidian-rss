@@ -10,7 +10,8 @@ export class AdvancedSettings extends SettingsSection {
 
     display() {
         this.contentEl.createEl("h4", {text: t("customize_terms")});
-        this.contentEl.createSpan({text: "Change a few selected terms here. You can help translating the plugin "});
+    // Using direct string to satisfy older Obsidian API type definitions in tests
+    this.contentEl.createSpan("Change a few selected terms here. You can help translating the plugin ");
         this.contentEl.createEl("a", {text: "here", href: "https://github.com/joethei/obsidian-rss/tree/master/src/l10n"});
 
         new Setting(this.contentEl)
