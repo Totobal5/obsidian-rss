@@ -204,9 +204,23 @@ function removeFormatting(html: string): string {
     return doc.documentElement.innerHTML;
 }
 
-export function openInBrowser(item: Item): void {
-    if (typeof item.url() === "string") {
-        window.open(item.url(), '_blank');
+export function openInBrowser(item: Item | any): void {
+    try {
+        // Prefer method url() if exists
+        let link: string | undefined;
+        if (item && typeof item.url === 'function') {
+            const v = item.url();
+            if (typeof v === 'string' && v.length) link = v;
+        }
+        // Fallback to common raw properties (raw feed item objects passed directly to ItemModal)
+        if (!link && item && typeof item.link === 'string') link = item.link;
+        if (!link && item && typeof item.href === 'string') link = item.href;
+        if (!link) return; // nothing to open
+        // Basic protocol safety
+        if (!/^https?:\/\//i.test(link)) return;
+        window.open(link, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+        console.warn('[rss] openInBrowser failed', e);
     }
 }
 
