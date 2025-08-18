@@ -193,7 +193,7 @@ export class ItemModal extends Modal {
         contentEl.style.overflowY = "auto";
         contentEl.style.maxHeight = "80vh";
 
-        const topButtons = contentEl.createDiv('topButtons');
+    const topButtons = contentEl.createDiv('top-buttons');
         topButtons.style.position = "sticky";
         topButtons.style.top = "0";
         topButtons.style.backgroundColor = "var(--background-primary)";
@@ -252,7 +252,7 @@ export class ItemModal extends Modal {
         if(window['PluginApi']) {
             const tts = pluginApi("tts");
             if (tts) {
-                const ttsButton = new ButtonComponent(topButtons)
+                    const ttsButton = new ButtonComponent(topButtons)
                     .setIcon("headphones")
                     .setTooltip(t("read_article_tts"))
                     .onClick(async () => {

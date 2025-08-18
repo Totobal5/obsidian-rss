@@ -1,53 +1,274 @@
 /* Sidebar (subscriptions) */
-.rss-fr-subs { 
-  grid-area: subs; 
-  border-right:1px solid var(--background-modifier-border); 
-  padding:12px; 
-  font-size:13px; 
-  background:var(--background-secondary); 
+.rss-fr-subs {
+  grid-area: subs;
+  border-right: 1px solid var(--background-modifier-border);
+  padding: 12px;
+  font-size: 13px;
+  background: var(--background-secondary);
+
   /* Sidebar remains static; list column handles scrolling */
-  position:relative; 
+  position: relative;
 }
+
 /* Ensure only the list scrolls: parent container should not create a new stacking context */
-.rss-fr-layout { overflow:hidden; }
+.rss-fr-layout { overflow: hidden; }
+
+/* Make the sidebar and the top actions use a column flex layout so the folder list
+   can shrink/grow and allow its child to scroll. */
+.rss-fr-subs, .rss-top-actions {
+  display: flex;
+  gap: 4px;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+}
 
 /* Folder headers */
-.rss-fr-subs .rss-folder-wrapper { display:flex; align-items:center; gap:6px; }
-.rss-fr-subs .rss-folder-header { flex:1; padding:8px 12px; margin:4px 0; border-radius:8px; font-weight:600; color:var(--text-normal); cursor:pointer; display:flex; align-items:center; background:var(--background-primary); border:1px solid var(--background-modifier-border); transition:all .2s ease; min-width:0; }
-.rss-fr-subs .rss-folder-caret-btn { margin:0 4px 0 0; font-size:11px; opacity:.75; background:var(--background-modifier-border); border:1px solid var(--background-modifier-border); width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; cursor:pointer; padding:0; }
-.rss-fr-subs .rss-folder-caret-btn:hover { background:var(--background-modifier-hover); opacity:1; }
-.rss-fr-subs .rss-folder-header .rss-folder-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.rss-fr-subs .rss-folder-group.collapsed .rss-folder-header { opacity:.85; }
-.rss-fr-subs .rss-folder-feeds { margin-left:26px; display:flex; flex-direction:column; gap:2px; }
-.rss-fr-subs .rss-folder-header:hover { background:var(--background-modifier-hover); border-color:var(--text-accent); transform:translateX(2px); }
+.rss-fr-subs .rss-folder-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rss-fr-subs .rss-folder-header {
+  flex: 1;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--text-normal);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.rss-fr-subs .rss-folder-caret-btn {
+  margin: 0 4px 0 0;
+  font-size: 11px;
+  opacity: 0.75;
+  background: var(--background-modifier-border);
+  border: 1px solid var(--background-modifier-border);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rss-fr-subs .rss-folder-caret-btn:hover {
+  background: var(--background-modifier-hover);
+  opacity: 1;
+}
+
+.rss-fr-subs .rss-folder-header .rss-folder-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rss-fr-subs .rss-folder-group.collapsed .rss-folder-header { opacity: 0.85; }
+
+.rss-fr-subs .rss-folder-feeds {
+  margin-left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+// Make this element scrollable
+.rss-folder-groups {
+  height: 100%;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overscroll-behavior: auto !important;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.rss-fr-subs .rss-folder-header:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--text-accent);
+  transform: translateX(2px);
+}
 
 /* Mark folder */
-.rss-fr-subs .rss-folder-header .rss-mark-folder { font-size:12px; background:var(--background-modifier-border); color:var(--text-muted); width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; margin-right:6px; transition:background .15s ease, color .15s ease; }
-.rss-fr-subs .rss-folder-header .rss-mark-folder:hover { background:var(--text-accent); color:var(--text-on-accent); }
+.rss-fr-subs .rss-folder-header .rss-mark-folder {
+  font-size: 12px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-right: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rss-fr-subs .rss-folder-header .rss-mark-folder:hover {
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+}
 
 /* Feed headers */
-.rss-fr-subs .rss-feed-line { display:flex; align-items:center; gap:6px; margin:2px 0 2px 10px; }
-.rss-fr-subs .rss-feed-header { flex:1; padding:6px 12px; border-radius:6px; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:space-between; position:relative; transition:all .15s ease; border-left:2px solid transparent; min-width:0; }
-.rss-fr-subs .rss-feed-header .rss-feed-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.rss-fr-subs .rss-feed-header:hover { background:var(--background-modifier-hover); color:var(--text-normal); border-left-color:var(--text-accent); }
-.rss-fr-subs .rss-feed-header:before { content:'•'; color:var(--text-faint); font-size:16px; margin-right:8px; line-height:1; }
-.rss-fr-subs .rss-feed-header:hover:before { color:var(--text-accent); }
-.rss-fr-subs .rss-mark-feed { font-size:11px; background:var(--background-modifier-border); color:var(--text-faint); width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; transition:background .15s ease, color .15s ease; flex-shrink:0; }
-.rss-fr-subs .rss-mark-feed:hover { background:var(--text-accent); color:var(--text-on-accent); }
+.rss-fr-subs .rss-feed-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 2px 10px;
+}
+
+.rss-fr-subs .rss-feed-header {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  transition: all 0.15s ease;
+  border-left: 2px solid transparent;
+  min-width: 0;
+}
+
+.rss-fr-subs .rss-feed-header .rss-feed-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rss-fr-subs .rss-feed-header:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-left-color: var(--text-accent);
+}
+
+.rss-fr-subs .rss-feed-header::before {
+  content: "•";
+  color: var(--text-faint);
+  font-size: 16px;
+  margin-right: 8px;
+  line-height: 1;
+}
+
+.rss-fr-subs .rss-feed-header:hover::before { color: var(--text-accent); }
+
+.rss-fr-subs .rss-mark-feed {
+  font-size: 11px;
+  background: var(--background-modifier-border);
+  color: var(--text-faint);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.rss-fr-subs .rss-mark-feed:hover {
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+}
 
 /* All feeds button */
-.rss-fr-subs .rss-all-feeds-button { padding:8px 12px; margin:4px 0 8px 0; border-radius:8px; font-weight:600; color:var(--text-normal); cursor:pointer; display:flex; align-items:center; background:var(--interactive-accent); color:var(--text-on-accent); transition:all .2s ease; }
-.rss-fr-subs .rss-all-feeds-button:hover { background:var(--interactive-accent-hover); transform:translateX(2px); }
-.rss-fr-subs .rss-all-feeds-button.active { background:var(--interactive-accent); box-shadow:0 0 0 2px var(--interactive-accent-hover); }
+.rss-fr-subs .rss-all-feeds-button {
+  padding: 8px 12px;
+  margin: 4px 0 8px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  transition: all 0.2s ease;
+}
+
+.rss-fr-subs .rss-all-feeds-button:hover {
+  background: var(--interactive-accent-hover);
+  transform: translateX(2px);
+}
+
+.rss-fr-subs .rss-all-feeds-button.active {
+  background: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+}
 
 /* Active states */
-.rss-fr-subs .rss-folder-header.active, .rss-fr-subs .rss-feed-header.active { background:var(--background-modifier-hover); color:var(--text-normal); border-left-color:var(--text-accent); }
+.rss-fr-subs .rss-folder-header.active,
+.rss-fr-subs .rss-feed-header.active {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-left-color: var(--text-accent);
+}
 
 /* Favorites / counters */
-.rss-favorites-button { display:flex; align-items:center; padding:8px 12px; margin:4px 0; border-radius:6px; cursor:pointer; transition:all .2s ease; background:transparent; color:var(--text-normal); font-weight:500; }
-.rss-favorites-button:hover { background:var(--background-modifier-hover); color:var(--text-accent); }
-.rss-favorites-button.active { background:var(--background-modifier-active-hover); color:var(--text-accent); font-weight:600; }
-.rss-item-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:2px 6px; background:var(--text-accent); color:var(--text-on-accent); border-radius:10px; font-size:11px; font-weight:600; line-height:1; margin-left:8px; }
-.rss-feed-header .rss-item-count-badge { opacity:.8; transition:opacity .2s ease; }
-.rss-feed-header:hover .rss-item-count-badge { opacity:1; }
-@media (max-width:600px){ .rss-item-count-badge { min-width:18px; height:18px; font-size:10px; margin-left:6px; } }
+.rss-favorites-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.rss-favorites-button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+}
+
+.rss-favorites-button.active {
+  background: var(--background-modifier-active-hover);
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+.rss-item-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 2px 6px;
+  background: var(--text-accent);
+  color: var(--text-on-accent);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  margin-left: 8px;
+}
+
+.rss-feed-header .rss-item-count-badge {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.rss-feed-header:hover .rss-item-count-badge { opacity: 1; }
+
+@media (max-width: 600px) {
+  .rss-item-count-badge {
+    min-width: 18px;
+    height: 18px;
+    font-size: 10px;
+    margin-left: 6px;
+  }
+}

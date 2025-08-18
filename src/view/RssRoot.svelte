@@ -18,8 +18,15 @@
   let favoritesMode = false;
   let favoriteItems: any[] = [];
   let listItems: { feed: Feed|null, item: any }[] = [];
-  let grouped: { key: string, label: string, items: {feed:Feed|null,item:any}[] }[] = [];
-  function buildActiveFeedsFromSelection(){
+  let grouped: { key: string, label: string, items: {feed: Feed | null, item:any }[] } [] = [];
+  // UI state for sidebar
+  let activeFeedName: string | null = null;
+  let activeFolderName: string | null = null;
+  let collapsedFolders: Set<string> = new Set();
+  // bump to force FolderView rerender
+  let countsVersion = 0;
+  
+  function buildActiveFeedsFromSelection() {
     if (favoritesMode) return; // favorite mode handled separately
     if (activeFeedName) {
       const f = allFeeds.find(ff => safeName(ff) === activeFeedName);
@@ -33,34 +40,44 @@
     }
     activeFeeds = allFeeds;
   }
-  // UI state for sidebar
-  let activeFeedName: string | null = null;
-  let activeFolderName: string | null = null;
-  let collapsedFolders: Set<string> = new Set();
-  let countsVersion = 0; // bump to force FolderView rerender
-
-  const loadFolders = async () => {
+  
+  // Loads folder and feed data from the plugin, updates local state, rebuilds active feed selection and item lists, and refreshes favorites.
+  async function loadFolders() {
     if (!plugin || !plugin.providers || !plugin.providers.getCurrent) { folders = []; return; }
+    
     try {
       const current = plugin.providers.getCurrent();
-      if (current && current.folders) { folders = await current.folders(); } else { folders = []; }
-    } catch { folders = []; }
-    allFeeds = [];
-  for (const f of folders) allFeeds.push(...f.feeds());
-  buildActiveFeedsFromSelection();
-  rebuildList();
+      if (current && current.folders) {
+        folders = await current.folders();
+      } else {
+        folders = [];
+      }
+    } catch (err) {
+      console.error('Error loading folders:', err);
+      folders = [];
+    }
+
+    const feeds: Feed[] = [];
+    for (const f of folders) {
+      feeds.push(...f.feeds());
+    }
+    allFeeds = feeds;
+
+    buildActiveFeedsFromSelection();
+    rebuildList();
     refreshFavorites(false);
-  };
+  }
 
   function setActiveFeeds(feeds: Feed[]) {
     favoritesMode = false;
     activeFeeds = feeds;
   }
 
+  // Extracts the first image URL from an HTML string using a regex; may not handle complex or malformed HTML.
   function firstImageFromHtml(html: string): string | undefined {
     if (!html) return undefined;
     try {
-      const m = html.match(/<img[^>]+src="([^"]+)"/i);
+      const m = html.match(/src\s*=\s*["']?([^"'\s>]+)["']?/i);
       return m ? m[1] : undefined;
     } catch { return undefined; }
   }
@@ -75,42 +92,95 @@
     } catch { return undefined; }
   }
 
+  function extractDate(obj: { item: any } | undefined): number {
+    if (!obj || !obj.item) return 0;
+    const itm: any = obj.item;
+    if (typeof itm.pubDateMs === 'number') return itm.pubDateMs;
+    const pubDateValue = itm.pubDate;
+    let rawDate: any;
+    
+    if (typeof pubDateValue === 'function') {
+      rawDate = pubDateValue();
+    } else {
+      rawDate = pubDateValue;
+    }
+
+    if (typeof rawDate === 'string' || rawDate instanceof Date) {
+      const dateObj = new Date(rawDate);
+      if (!isNaN(dateObj.getTime())) return dateObj.getTime();
+    }
+
+    return 0;
+  }
+
   function rebuildList() {
     if (favoritesMode) {
-      listItems = favoriteItems.map(it => ({ feed: null as Feed | null, item: it }));
+      listItems = favoriteItems.map(it => {
+        // Try to find the feed for this item by matching feed name or link
+        let feed = allFeeds.find(f =>
+          (typeof f.name === 'function' ? f.name() : f.name) === it.feedName ||
+          (typeof f.link === 'function' ? f.link() : f.link) === it.feedLink
+        ) || null;
+        return { feed, item: it };
+      });
+
       buildGroups();
       return;
     }
-    // Derivar desde plugin.settings.items para asegurar consistencia con contadores
+
+    // Derive from plugin.settings.items to ensure consistency with counters
     const collected: {feed: Feed|null, item:any}[] = [];
     const rawFeeds: any[] = Array.isArray(plugin?.settings?.items) ? plugin.settings.items : [];
-    // Crear mapa feedName -> Feed instancia para metadata
+
+    // Create feedName -> Feed instance map for metadata
     const byName: Record<string, Feed> = {};
-    for (const f of allFeeds) byName[safeName(f)] = f;
+    for (const f of allFeeds) {
+      byName[safeName(f)] = f;
+    }
+
     for (const fc of rawFeeds) {
-      if (!fc || !Array.isArray(fc.items)) continue;
+      if (!fc || !Array.isArray(fc.items) ) continue;
+      
       const fname = fc.name;
       const feedObj = byName[fname];
-      // Filtrado por selección
+      // Filter by selection
       if (activeFeedName && fname !== activeFeedName) continue;
+
       if (!activeFeedName && activeFolderName) {
-        // Comparar carpeta
-        const folderVal = (fc.folder || '').toString();
-        if (folderVal !== activeFolderName) continue;
+        // If there is not an active feed but there is an active folder, filter by folder
+        if (!activeFeedName && !activeFolderName) {
+          if (collected.length === 0) {
+            const seenLinks = new Set<string>();
+            for (const fc of rawFeeds) {
+              if (fc && Array.isArray(fc.items)) {
+                for (const it of fc.items) {
+                  const link = it?.link;
+                  if (link && seenLinks.has(link)) continue;
+                  if (link) seenLinks.add(link);
+                  collected.push({feed: byName[fc.name]||null, item: it});
+                }
+              }
+            }
+          }
+        }
       }
-      for (const it of fc.items) if (it) collected.push({feed: feedObj || null, item: it});
+
+
+      const itm: any = obj.item;
+      if (itm.pubDateMs && typeof itm.pubDateMs === 'number') return itm.pubDateMs;
+      const pubDateValue = itm.pubDate;
+      const rawDate = typeof pubDateValue === 'function' ? pubDateValue() : pubDateValue;
+      const dateObj = rawDate ? new Date(rawDate) : undefined;
+      return dateObj && !isNaN(dateObj.getTime()) ? dateObj.getTime() : 0;
+      } catch {
+    // Descending sort: newest items appear at the top of the UI group (matches user expectations)
+    collected.sort((a,b)=> extractDate(b)-extractDate(a));
     }
-    // Si no hay selección aplicable (todo), fallback a todos feeds listados
-    if (!activeFeedName && !activeFolderName) {
-      if (collected.length === 0) {
-        for (const fc of rawFeeds) if (fc && Array.isArray(fc.items)) for (const it of fc.items) collected.push({feed: byName[fc.name]||null, item: it});
-      }
-    }
-    const extractDate = (obj:{item:any}|undefined) => {
-      try { if(!obj||!obj.item) return 0; const itm:any=obj.item; if (itm.pubDateMs && typeof itm.pubDateMs==='number') return itm.pubDateMs; const pv = itm.pubDate; const raw = typeof pv==='function'? pv(): pv; const d = raw? new Date(raw): undefined; return d && !isNaN(d.getTime())? d.getTime():0; } catch { return 0; } };
-  // Ascending so la última (más reciente) quede al final visualmente dentro de su grupo
-  collected.sort((a,b)=> extractDate(a)-extractDate(b));
+    
+    // Descending so la más reciente quede al inicio visualmente dentro de su grupo
+    collected.sort((a,b)=> extractDate(b)-extractDate(a));
     listItems = collected;
+
     buildGroups();
   }
 
