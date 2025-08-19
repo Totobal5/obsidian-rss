@@ -5,7 +5,10 @@ import {feedsStore, configuredFeedsStore, filteredStore, foldedState} from '../s
 
 export class SettingsManager {
   private saveTimer?: number;
-  constructor(private plugin: RssReaderPlugin) {}
+  
+  constructor(private plugin: RssReaderPlugin) {
+
+  }
 
   async writeFeedContent(change: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
     const current = this.plugin.settings.items || [];

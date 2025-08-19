@@ -11,40 +11,63 @@ import {Md5} from "ts-md5";
  */
 
 export interface RssFeedContent {
-    subtitle: string,
-    title: string,
-    name: string,
-    link: string,
-    image: string,
-    folder: string,
-    description: string,
-    language: string,
-    hash: string,
-    items: RssFeedItem[]
+    subtitle:       string,
+    title:          string,
+    name:           string,
+    link:           string,
+    image:          string,
+    folder:         string,
+    description:    string,
+    language:       string,
+    hash:           string,
+    items:          RssFeedItem[]
 }
 
+/**
+ * Represents a single item in an RSS feed.
+ *
+ * @property {string} title - The title of the feed item.
+ * @property {string} description - A brief description of the feed item.
+ * @property {string} content - The full content of the feed item.
+ * @property {string} category - The category or genre of the feed item.
+ * @property {string} link - The URL link to the feed item.
+ * @property {string} creator - The creator or author of the feed item.
+ * @property {string} language - The language of the feed item.
+ * @property {string} enclosure - The enclosure URL associated with the feed item (e.g., media file).
+ * @property {string} enclosureType - The MIME type of the enclosure.
+ * @property {string} image - The image URL associated with the feed item.
+ * @property {string} pubDate - The publication date of the feed item.
+ * @property {string} folder - The folder or category in which the feed item is stored.
+ * @property {string} feed - The name or identifier of the RSS feed.
+ * @property {boolean} favorite - Indicates if the feed item is marked as a favorite.
+ * @property {boolean} read - Indicates if the feed item has been read.
+ * @property {boolean} created - Indicates if the feed item was created by the user.
+ * @property {string[]} tags - An array of tags associated with the feed item.
+ * @property {string} hash - A unique hash for the item generated from the title and link.
+ * @property {string} id - A unique identifier for the feed item.
+ * @property {string[]} highlights - An array of highlighted text snippets from the feed item.
+ */
 export interface RssFeedItem {
-    title: string,
-    description: string,
-    content: string,
-    category: string,
-    link: string,
-    creator: string,
-    language: string,
-    enclosure: string,
-    enclosureType: string,
-    image: string,
-    pubDate: string,
-    folder: string,
-    feed: string,
-    favorite: boolean,
-    read: boolean,
-    created: boolean,
-    visited: boolean,
-    tags: string[],
-    hash: string,
-    id: string,
-    highlights: string[],
+    title:          string,
+    description:    string,
+    content:        string,
+    category:       string,
+    link:           string,
+    creator:        string,
+    language:       string,
+    enclosure:      string,
+    enclosureType:  string,
+    image:          string,
+    pubDate:        string,
+    folder:         string,
+    feed:           string,
+    favorite:       boolean,
+    read:           boolean,
+    created:        boolean,
+    tags:           string[],
+    hash:           string,
+    id:             string,
+    highlights:     string[],
 }
 
 /**
@@ -169,7 +192,6 @@ function buildItem(element: Element): RssFeedItem {
         read: null,
         favorite: null,
         created: null,
-    visited: null,
         tags: [],
         hash: null,
         highlights: []
@@ -237,9 +259,8 @@ export async function getFeedItems(feed: RssFeed, opts?: { signal?: AbortSignal 
             item.read = false;
             item.favorite = false;
             item.created = false;
-            item.visited = false;
             item.language = language;
-            item.hash = <string>new Md5().appendStr(item.title).appendStr(item.folder).appendStr(item.link).end();
+            item.hash = <string>new Md5().appendStr(item.title).appendStr(item.link).end();
 
             if (!item.image && feed.url.includes("youtube.com/feeds")) {
                 item.image = "https://i3.ytimg.com/vi/" + item.id.split(":")[2] + "/hqdefault.jpg";

@@ -9,21 +9,16 @@ import {
     filteredStore,
     foldedState,
     folderStore,
+    itemsStore,
     settingsStore,
     sortedFeedsStore,
     tagsStore
 } from "./stores";
 import type { FilteredFolderContent } from './stores';
 import {VIEW_ID} from "./consts";
-import {getFeedItems} from "./parser/rssParser";
 import type { RssFeedContent, RssFeedItem } from "./parser/rssParser";
-import groupBy from "lodash.groupby";
-import mergeWith from "lodash.mergewith";
-import keyBy from "lodash.keyby";
-import values from "lodash.values";
 import {SortOrder} from "./modals/FilteredFolderModal";
 import type {FilteredFolder} from "./modals/FilteredFolderModal";
-import {Md5} from "ts-md5";
 import t from "./l10n/locale";
 import {RSSReaderSettingsTab} from "./settings/SettingsTab";
 import {CleanupModal} from "./modals/CleanupModal";
@@ -34,7 +29,7 @@ import {LocalFeedProvider} from "./providers/local/LocalFeedProvider";
 import {RSS_EVENTS} from './events';
 // Type-only imports for service properties (avoid circular eagerly loaded deps)
 import type {SettingsManager} from './services/SettingsManager';
-import type {FeedUpdater} from './services/FeedUpdater';
+import type {FeedManager} from './services/FeedManager';
 import type {ItemStateService} from './services/ItemStateService';
 import type {CountersService} from './services/CountersService';
 import type {MigrationService} from './services/MigrationService';
@@ -44,227 +39,119 @@ export default class RssReaderPlugin extends Plugin {
     providers: Providers;
     private updating = false;
     private updateAbort?: AbortController;
-    // Performance indexes
-    private itemByLink: Map<string, RssFeedItem> = new Map();
-    private unreadCountByFeed: Map<string, number> = new Map();
-    private feedContentSaveTimer: number | undefined;
+
     // Services (initialized lazily in onload)
     settingsManager!: SettingsManager;
-    feedUpdater!: FeedUpdater;
+    feedManager!: FeedManager;
     itemStateService!: ItemStateService;
     counters!: CountersService;
     migrations!: MigrationService;
 
     async onload(): Promise<void> {
         const startTime = performance.now();
-    console.log('🚀 RSS Reader: Starting plugin load...');
-        //update settings object whenever store contents change.
-        this.register(
-            settingsStore.subscribe((value: RssReaderSettings) => {
-                this.settings = value;
-            })
-        );
+        console.log('RSS Reader: Starting plugin load...');
         
+        // Update settings object whenever store contents change.
+        this.register(settingsStore.subscribe((value: RssReaderSettings) => { this.settings = value; }));
+        
+        // Initialize services (lazy import style to avoid circular)
+        const {SettingsManager} = await import('./services/SettingsManager');
+        const {FeedManager} = await import('./services/FeedManager');
+        const {ItemStateService} = await import('./services/ItemStateService');
+        const {CountersService} = await import('./services/CountersService');
+        const {MigrationService} = await import('./services/MigrationService');
+        
+        this.settingsManager = new SettingsManager(this);
+        this.feedManager = new FeedManager(this);
+        this.itemStateService = new ItemStateService(this);
+        this.counters = new CountersService(this);
+        this.migrations = new MigrationService(this);
+
         const settingsStart = performance.now();
         await this.loadSettings();
-        console.log(`⚙️  Settings loaded in ${(performance.now() - settingsStart).toFixed(2)}ms`);
+        console.log(`Settings loaded in ${(performance.now() - settingsStart).toFixed(2)}ms`);
         
         const providersStart = performance.now();
-    this.providers = new Providers(this);
-    // Initialize services (lazy import style to avoid circular)
-    const {SettingsManager} = await import('./services/SettingsManager');
-    const {FeedUpdater} = await import('./services/FeedUpdater');
-    const {ItemStateService} = await import('./services/ItemStateService');
-    const {CountersService} = await import('./services/CountersService');
-    const {MigrationService} = await import('./services/MigrationService');
-    this.settingsManager = new SettingsManager(this);
-    this.feedUpdater = new FeedUpdater(this);
-    this.itemStateService = new ItemStateService(this);
-    this.counters = new CountersService(this);
-    this.migrations = new MigrationService(this);
-        this.providers.register(new LocalFeedProvider(this));
-        console.log(`🔌 Providers initialized in ${(performance.now() - providersStart).toFixed(2)}ms`);
-
-        this.addCommand({
-            id: "rss-open",
-            name: t("open"),
-            checkCallback: (checking: boolean) => {
-                if (checking) {
-                    return (this.app.workspace.getLeavesOfType(VIEW_ID).length === 0);
-                }
-                this.initLeaf();
-            }
-        });
+        this.providers = new Providers(this);
 
 
-        this.addCommand({
-            id: 'rss-refresh',
-            name: t("refresh_feeds"),
-            callback: async () => {
-                await this.updateFeeds();
-            }
-        });
 
-    // Helper debug logger (minimal change point)
-    const dbg = (...args: any[]) => { if (this.settings?.debugLogging) console.log('[RSS][debug]', ...args); };
+        this.providers.register(new LocalFeedProvider(this) );
 
-        this.addCommand({
-            id: 'rss-cleanup',
-            name: t("cleanup"),
-            callback: async () => {
-                new CleanupModal(this).open();
-            }
-        });
+        console.log(`Providers initialized in ${(performance.now() - providersStart).toFixed(2)}ms`);
 
-        this.addCommand({
-            id: 'rss-open-feed',
-            name: "Open Feed from URL",
-            callback: async () => {
-                const input = new TextInputPrompt(this.app, "URL", "URL", "", "", t("open"));
-                await input.openAndGetValue(async (text) => {
-                    const provider = await this.providers.getById('local') as LocalFeedProvider;
-                    const feed = await provider.feedFromUrl(text.getValue());
-                    const items = feed.items();
-                    if (!items || items.length === 0) {
-                        input.setValidationError(text, t("invalid_feed"));
-                        return;
-                    }
-
-                    input.close();
-                    new ArticleSuggestModal(this, items).open();
-                });
-            }
-        });
-
-        // Comando para abrir el RSS reader en la pestaña principal
-        this.addCommand({
-            id: "open-rss-main-tab",
-            name: "Abrir RSS Reader en pestaña principal",
-            callback: () => {
-                this.activateRSSView();
-            }
-        });
-
-        // Comando adicional para abrir en nueva pestaña
-        this.addCommand({
-            id: "open-rss-new-tab",
-            name: "Abrir RSS Reader en nueva pestaña",
-            callback: () => {
-                const leaf = this.app.workspace.getLeaf("tab");
-                leaf.setViewState({
-                    type: VIEW_ID,
-                    active: true
-                });
-                this.app.workspace.revealLeaf(leaf);
-            }
-        });
-
-        // Comando para regenerar todas las entradas (resetear items y volver a cargar)
-        this.addCommand({
-            id: 'rss-regenerate-items',
-            name: 'Regenerar todas las entradas (reset)',
-            callback: async () => {
-                try {
-                    console.log('🧨 Regenerating all feed items: clearing existing items and refetching...');
-                    new Notice('Regenerando entradas de RSS…');
-                    // 1. Vaciar items actuales
-                    await this.writeFeedContent(() => []);
-                    // 2. Invalidar cache del provider local (si existe)
-                    const localProvider = await this.providers.getById('local') as LocalFeedProvider;
-                    if (localProvider && localProvider.invalidateCache) {
-                        localProvider.invalidateCache();
-                    }
-                    // 3. Volver a cargar feeds desde cero
-                    await this.updateFeeds();
-                    // 4. Despachar evento para refrescar contadores en la UI
-                    // NOTE: use document.dispatchEvent for internal RSS events so ViewLoader listeners receive them.
-                    document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
-                    new Notice('Entradas regeneradas');
-                    console.log('✅ Regeneración completada correctamente');
-                } catch (e) {
-                    console.error('❌ Error regenerating feed items', e);
-                    new Notice('Error al regenerar entradas (ver consola)');
-                }
-            }
-        });
-
+        // Commands and views
         const commandsStart = performance.now();
+
+        this.initCommands();
         this.registerView(VIEW_ID, (leaf: WorkspaceLeaf) => new ViewLoader(leaf, this));
         this.addSettingTab(new RSSReaderSettingsTab(this.app, this));
-        console.log(`📋 Commands and views registered in ${(performance.now() - commandsStart).toFixed(2)}ms`);
 
-        const intervalStart = performance.now();
-        let interval: number;
-        if (this.settings.updateTime !== 0) {
-            interval = window.setInterval(async () => {
-                await this.updateFeeds();
-            }, this.settings.updateTime * 60 * 1000);
-            this.registerInterval(interval);
-        }
+        console.log(`Commands and views registered in ${(performance.now() - commandsStart).toFixed(2)}ms`);
 
-        if (this.settings.autoSync) {
-            this.registerInterval(window.setInterval(async () => {
-                await this.loadSettings();
-            }, 1000 * 60));
-        }
-        console.log(`⏰ Intervals setup in ${(performance.now() - intervalStart).toFixed(2)}ms`);
-
+        // Manage feed update interval with a single subscription
+        let interval: number | undefined;
         const storeStart = performance.now();
-        //reset update timer on settings change.
         settingsStore.subscribe((settings: RssReaderSettings) => {
-            if (interval !== undefined)
+            if (interval !== undefined) {
                 clearInterval(interval);
-            if (settings.updateTime != 0) {
+                interval = undefined;
+            }
+
+            if (settings.updateTime !== 0) {
                 interval = window.setInterval(async () => {
-                    await this.updateFeeds();
+                    await this.feedManager.updateFeeds();
                 }, settings.updateTime * 60 * 1000);
+
                 this.registerInterval(interval);
             }
 
             this.settings = settings;
             this.saveSettings();
         });
-        console.log(`📦 Store subscriptions setup in ${(performance.now() - storeStart).toFixed(2)}ms`);
-
-        console.log(`✅ RSS Reader loaded successfully in ${(performance.now() - startTime).toFixed(2)}ms total`);
 
         this.app.workspace.onLayoutReady(async () => {
             await this.migrateData();
             await this.initLeaf();
-            await this.updateFeeds();
-
+            await this.feedManager.updateFeeds();
 
             feedsStore.subscribe((feeds: RssFeedContent[]) => {
                 // Ensure feeds is always an array
                 if (!Array.isArray(feeds)) {
-                    console.warn('🔍 feeds is not an array:', typeof feeds, feeds);
+                    console.warn('feeds is not an array:', typeof feeds, feeds);
                     return;
                 }
 
-                //keep sorted store sorted when the items change.
-                const sorted = groupBy(feeds, "folder");
-                sortedFeedsStore.update(() => sorted);
-
-                // Flatten all items more efficiently
+                // Efficiently process feeds in a single loop
+                const sorted: Record<string, RssFeedContent[]> = {};
+                // Items from every folder
                 const items: RssFeedItem[] = [];
-                feeds.forEach((feed: RssFeedContent) => {
-                    if (feed && feed.items) {
-                        items.push(...feed.items);
-                    }
-                });
-
-                //collect tags for auto completion more efficiently
                 const tags: string[] = [];
-                items.forEach((item: RssFeedItem) => {
-                    if (item && item.tags && Array.isArray(item.tags)) {
-                        item.tags.forEach((tag: string) => {
-                            if (tag && tag.length > 0) {
-                                tags.push(tag);
-                            }
-                        });
-                    }
-                });
+                const folders: string[] = [];
 
+                for (const feed of feeds) {
+                    // Sort feeds by folder
+                    const folder = feed.folder || "";
+                    if (!sorted[folder]) sorted[folder] = [];
+                    sorted[folder].push(feed);
+
+                    // Flatten items and collect tags/folders
+                    if (feed && Array.isArray(feed.items)) {
+                        for (const item of feed.items) {
+                            items.push(item);
+                            if (item && Array.isArray(item.tags)) {
+                                for (const tag of item.tags) {
+                                    if (tag && tag.length > 0) tags.push(tag);
+                                }
+                            }
+                            if (item && item.folder) {
+                                folders.push(item.folder);
+                            }
+                        }
+                    }
+                }
+
+                // Collect tags from metadata cache
                 const metadataCache = this.app.metadataCache as any;
                 const fileTags = metadataCache.getTags?.() || {};
                 for (const tag of Object.keys(fileTags)) {
@@ -272,113 +159,21 @@ export default class RssReaderPlugin extends Plugin {
                 }
                 tagsStore.update(() => new Set<string>(tags.filter(tag => tag.length > 0)));
 
-                //collect all folders for auto-completion
-                const folders: string[] = [];
-                for (const item of items) {
-                    if (item !== undefined)
-                        folders.push(item.folder);
-                }
-                folderStore.update(() => new Set<string>(folders.filter(folder => folder !== undefined && folder.length > 0)));
+                // Update sorted feeds and folders
+                sortedFeedsStore.update(() => sorted);
+                folderStore.update(() => new Set<string>(folders.filter(folder => folder && folder.length > 0)));
 
-                this.filterItems(items);
+                // Sort items by date, newest first
+                items.sort((a, b) => {
+                    const dateA = Date.parse(a.pubDate ?? '');
+                    const dateB = Date.parse(b.pubDate ?? '');
+                    return dateB - dateA;
+                });
             });
         });
     }
 
-    filterItems(items: RssFeedItem[]): void {
-        const filtered = new Array<FilteredFolderContent>();
-        for (const filter of this.settings.filtered) {
-            const sortOrder = (SortOrder as any)[filter.sortOrder] || SortOrder.DATE_NEWEST;
-            let filteredItems: RssFeedItem[];
-
-            if (filter.read && filter.unread) {
-                filteredItems = items.filter((item) => {
-                    return item.read === filter.read || item.read !== filter.unread;
-                });
-            } else if (filter.read) {
-                filteredItems = items.filter((item) => {
-                    return item.read;
-                });
-            } else if (filter.unread) {
-                filteredItems = items.filter((item) => {
-                    return !item.read;
-                });
-            }
-
-
-            if (filter.favorites) {
-                filteredItems = filteredItems.filter((item) => {
-                    return item.favorite === filter.favorites;
-                });
-            }
-
-            if (filter.filterFolders.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    return filter.filterFolders.includes(item.folder);
-                });
-            }
-            if (filter.ignoreFolders.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    return !filter.ignoreFolders.includes(item.folder);
-                });
-            }
-
-            if (filter.filterFeeds.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    return filter.filterFeeds.includes(item.feed);
-                });
-            }
-            if (filter.ignoreFeeds.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    return !filter.ignoreFeeds.includes(item.feed);
-                });
-            }
-
-            if (filter.filterTags.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    for (const tag of filter.filterTags) {
-                        if (!item.tags.contains(tag)) return false;
-                    }
-                    return true;
-                });
-            }
-            if (filter.ignoreTags.length > 0) {
-                filteredItems = filteredItems.filter((item) => {
-                    for (const tag of filter.ignoreTags) {
-                        if (item.tags.contains(tag)) return false;
-                    }
-                    return true;
-                });
-            }
-
-            const sortedItems = this.sortItems(filteredItems, sortOrder);
-            filtered.push({filter: filter, items: {items: sortedItems}});
-        }
-        filteredItemsStore.update(() => filtered);
-    }
-
-    sortItems(items: RssFeedItem[], sortOrder: SortOrder): RssFeedItem[] {
-        if (!items) return items;
-        if (sortOrder === SortOrder.ALPHABET_NORMAL) {
-            return items.sort((a, b) => a.title.localeCompare(b.title));
-        }
-        if (sortOrder === SortOrder.ALPHABET_INVERTED) {
-            return items.sort((a, b) => b.title.localeCompare(a.title))
-        }
-        if (sortOrder === SortOrder.DATE_NEWEST) {
-            //@ts-ignore
-            return items.sort((a, b) => window.moment(b.pubDate) - window.moment(a.pubDate));
-        }
-        if (sortOrder === SortOrder.DATE_OLDEST) {
-            //@ts-ignore
-            return items.sort((a, b) => window.moment(a.pubDate) - window.moment(b.pubDate));
-        }
-        return items;
-    }
-
-    async updateFeeds(): Promise<void> { await this.feedUpdater.updateFeeds(); }
-
-    onunload(): void {
+    async onUnload(): Promise<void> {
         console.log('unloading plugin rss reader');
         this.app.workspace
             .getLeavesOfType(VIEW_ID)
@@ -389,25 +184,27 @@ export default class RssReaderPlugin extends Plugin {
         if (this.app.workspace.getLeavesOfType(VIEW_ID).length > 0) {
             return;
         }
+
         await this.app.workspace.getRightLeaf(false).setViewState({
             type: VIEW_ID,
         });
     }
 
     async activateRSSView(): Promise<void> {
-        // Buscar si ya existe una vista RSS abierta
+        // Search for an existing RSS view
         const existing = this.app.workspace.getLeavesOfType(VIEW_ID);
         
         if (existing.length > 0) {
-            // Si existe, activarla
+            // If it exists, activate it
             this.app.workspace.revealLeaf(existing[0]);
         } else {
-            // Si no existe, crear una nueva en la pestaña actual o nueva
+            // If it doesn't exist, create a new one in the current or new tab
             const leaf = this.app.workspace.getLeaf(false);
             await leaf.setViewState({
                 type: VIEW_ID,
                 active: true
             });
+
             this.app.workspace.revealLeaf(leaf);
         }
     }
@@ -535,43 +332,64 @@ export default class RssReaderPlugin extends Plugin {
             try {
                 JSON.parse(file);
             } catch (e) {
-                console.error('❌ Invalid data.json, loading defaults.', e);
+                console.error('Invalid data.json, loading defaults.', e);
                 new Notice(t("RSS_Reader") + ': data.json invalid, loading defaults');
+
                 this.settings = {...DEFAULT_SETTINGS};
+
+                // Update stores for the defaults.
                 settingsStore.set(this.settings);
-                configuredFeedsStore.set(this.settings.feeds);
-                feedsStore.set(this.settings.items);
+                // Update the configured feeds store
+                feedsStore.set(this.settings.feeds);
+                itemsStore.set(this.settings.items);
+
                 foldedState.set(this.settings.folded);
+                
                 return;
             }
         }
 
+        // Generate new settings.
         const data = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+        
+        // Define the hotkeys for this plugin.
         if (data !== undefined && data !== null) {
             this.settings.hotkeys = Object.assign({}, DEFAULT_SETTINGS.hotkeys, data.hotkeys);
         }
+
+        // Save settings to stores
         settingsStore.set(this.settings);
-        configuredFeedsStore.set(this.settings.feeds);
-        feedsStore.set(this.settings.items);
+        // Update the configured feeds store
+        feedsStore.set(this.settings.feeds);
+        itemsStore.set(this.settings.items);
+        
+        // Feeds that were folded?
         foldedState.set(this.settings.folded);
-    this.rebuildIndexes();
     }
 
     async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+        await this.saveData(this.settings);
     }
 
     async writeFeeds(changeOpts: (feeds: RssFeed[]) => Partial<RssFeed[]>): Promise<void> {
-        await configuredFeedsStore.update((old) => ({...old, ...changeOpts(old)}));
+        // Update the configured feeds store
+        await configuredFeedsStore.update((old) => ({
+            ...old, ...changeOpts(old)
+        }));
+
+        // Update the feeds store
         await this.writeSettings((old) => ({
             feeds: changeOpts(old.feeds)
         }));
-        await this.updateFeeds();
+
+        await this.feedManager.updateFeeds();
     }
 
     // Deprecated: feed content writes delegated to settingsManager (kept for backward compatibility)
-    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> { return this.settingsManager.writeFeedContent(changeOpts); }
+    async writeFeedContent(changeOpts: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> { 
+        return this.settingsManager.writeFeedContent(changeOpts); 
+    }
 
     // Debounced variant for frequent small mutations (read/favorite toggles)
     async writeFeedContentDebounced(mutator: (items: RssFeedContent[]) => void, delay = 250): Promise<void> {
@@ -589,23 +407,7 @@ export default class RssReaderPlugin extends Plugin {
         } catch (e) { console.warn('Debounced write failed', e); }
     }
 
-    rebuildIndexes(): void {
-        this.itemByLink.clear();
-        this.unreadCountByFeed.clear();
-        for (const feedContent of (this.settings.items || [])) {
-            if (!feedContent || !Array.isArray(feedContent.items)) continue;
-            let unread = 0;
-            for (const it of feedContent.items) {
-                if (it && it.link) this.itemByLink.set(it.link, it as any);
-                if (!it.read) unread++;
-                // Cache parsed timestamp once
-                if (it.pubDate && (it as any).pubDateMs === undefined) {
-                    (it as any).pubDateMs = Date.parse(it.pubDate) || 0;
-                }
-            }
-            this.unreadCountByFeed.set(feedContent.name, unread);
-        }
-    }
+
 
     getItemByLink(link: string): RssFeedItem | undefined { return this.itemByLink.get(link); }
     getUnreadCountForFeed(feedName: string): number { return this.unreadCountByFeed.get(feedName) || 0; }
@@ -633,4 +435,81 @@ export default class RssReaderPlugin extends Plugin {
     async writeSettings(changeOpts: (settings: RssReaderSettings) => Partial<RssReaderSettings>): Promise<void> {
         await settingsStore.update((old) => ({...old, ...changeOpts(old)}));
     }
+
+    private initCommands(): void {
+        // Commands
+        this.addCommand({
+            id: "rss-open",
+            name: t("open"),
+            checkCallback: (checking: boolean) => {
+                if (checking) {
+                    return (this.app.workspace.getLeavesOfType(VIEW_ID).length === 0);
+                }
+                this.initLeaf();
+            }
+        });
+
+        this.addCommand({
+            id: 'rss-refresh',
+            name: t("refresh_feeds"),
+            callback: async () => { await this.updateFeeds(); }
+        });
+        
+        this.addCommand({
+            id: 'rss-cleanup',
+            name: t("cleanup"),
+            callback: async () => { new CleanupModal(this).open(); }
+        });
+
+        this.addCommand({
+            id: 'rss-open-feed',
+            name: "Open Feed from URL",
+            callback: async () => {
+                const input = new TextInputPrompt(this.app, "URL", "URL", "", "", t("open"));
+                await input.openAndGetValue(async (text) => {
+                    const provider = await this.providers.getById('local') as LocalFeedProvider;
+                    const feed = await provider.feedFromUrl(text.getValue());
+                    const items = feed.items();
+                    if (!items || items.length === 0) {
+                        input.setValidationError(text, t("invalid_feed"));
+                        return;
+                    }
+
+                    input.close();
+                    new ArticleSuggestModal(this, items).open();
+                });
+            }
+        });
+
+        // Comando para regenerar todas las entradas (resetear items y volver a cargar)
+        this.addCommand({
+            id: 'rss-regenerate-items',
+            name: t("regenerate_all"),
+            callback: async () => {
+                try {
+                    console.log('Regenerating all feed items: clearing existing items and refetching...');
+                    new Notice('Regenerando entradas de RSS…');
+                    // Vaciar items actuales
+                    await this.writeFeedContent(() => []);
+                    
+                    // 2. Invalidar cache del provider local (si existe)
+                    const localProvider = await this.providers.getById('local') as LocalFeedProvider;
+                    if (localProvider && localProvider.invalidateCache) {
+                        localProvider.invalidateCache();
+                    }
+                    // 3. Volver a cargar feeds desde cero
+                    await this.updateFeeds();
+                    // 4. Despachar evento para refrescar contadores en la UI
+                    // NOTE: use document.dispatchEvent for internal RSS events so ViewLoader listeners receive them.
+                    document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
+                    new Notice('Entradas regeneradas');
+                    console.log('✅ Regeneración completada correctamente');
+                } catch (e) {
+                    console.error('❌ Error regenerating feed items', e);
+                    new Notice('Error al regenerar entradas (ver consola)');
+                }
+            }
+        });
+    }
+
 }

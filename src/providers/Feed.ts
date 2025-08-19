@@ -6,7 +6,6 @@ export enum FeedOrder {
     NEWEST_FIRST,
 }
 
-
 export interface Feed {
     id(): number;
     url(): string;
@@ -20,4 +19,3 @@ export interface Feed {
     folderName(): string;
     items(): Item[];
 }
-

@@ -8,7 +8,7 @@ import * as TagModalMod from '../src/modals/TagModal';
 import * as SettingsTabMod from '../src/settings/SettingsTab';
 import * as ParserMod from '../src/parser/rssParser';
 import * as ProvidersMod from '../src/providers/Providers';
-import * as FeedUpdaterMod from '../src/services/FeedUpdater';
+import * as FeedUpdaterMod from '../src/services/FeedManager';
 
 describe('imports smoke', () => {
   test('core modules import statically', () => {

@@ -96,7 +96,9 @@ export class LocalFeedItem implements Item {
         }
         
         return "";
-    }    pubDate(): string {
+    }    
+    
+    pubDate(): string {
         return this.item.pubDate;
     }
 

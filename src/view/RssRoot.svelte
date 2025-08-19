@@ -9,7 +9,7 @@
   import type { Item } from '../providers/Item';
   import { ItemModal } from '../modals/ItemModal';
   import ListItem from './ListItem.svelte';
-
+  
   export let plugin: RssReaderPlugin;
 
   let folders: any[] = [];
@@ -19,10 +19,12 @@
   let favoriteItems: any[] = [];
   let listItems: { feed: Feed|null, item: any }[] = [];
   let grouped: { key: string, label: string, items: {feed: Feed | null, item:any }[] } [] = [];
+  
   // UI state for sidebar
   let activeFeedName: string | null = null;
   let activeFolderName: string | null = null;
   let collapsedFolders: Set<string> = new Set();
+
   // bump to force FolderView rerender
   let countsVersion = 0;
   
@@ -114,74 +116,30 @@
   }
 
   function rebuildList() {
+    // Favorite mode collects items
     if (favoritesMode) {
-      listItems = favoriteItems.map(it => {
-        // Try to find the feed for this item by matching feed name or link
+      listItems = allFeeds.map(it => {
         let feed = allFeeds.find(f =>
-          (typeof f.name === 'function' ? f.name() : f.name) === it.feedName ||
-          (typeof f.link === 'function' ? f.link() : f.link) === it.feedLink
-        ) || null;
-        return { feed, item: it };
-      });
+      
+          (typeof f.name == 'function' ? f.name() : f.name) === it.feedName ||
 
+
+
+        )
+
+
+
+      })
+
+
+      listItems = favoriteItems.map(it => ({ feed: null as Feed | null, item: it }) );
       buildGroups();
+
       return;
     }
 
-    // Derive from plugin.settings.items to ensure consistency with counters
-    const collected: {feed: Feed|null, item:any}[] = [];
-    const rawFeeds: any[] = Array.isArray(plugin?.settings?.items) ? plugin.settings.items : [];
-
-    // Create feedName -> Feed instance map for metadata
-    const byName: Record<string, Feed> = {};
-    for (const f of allFeeds) {
-      byName[safeName(f)] = f;
-    }
-
-    for (const fc of rawFeeds) {
-      if (!fc || !Array.isArray(fc.items) ) continue;
-      
-      const fname = fc.name;
-      const feedObj = byName[fname];
-      // Filter by selection
-      if (activeFeedName && fname !== activeFeedName) continue;
-
-      if (!activeFeedName && activeFolderName) {
-        // If there is not an active feed but there is an active folder, filter by folder
-        if (!activeFeedName && !activeFolderName) {
-          if (collected.length === 0) {
-            const seenLinks = new Set<string>();
-            for (const fc of rawFeeds) {
-              if (fc && Array.isArray(fc.items)) {
-                for (const it of fc.items) {
-                  const link = it?.link;
-                  if (link && seenLinks.has(link)) continue;
-                  if (link) seenLinks.add(link);
-                  collected.push({feed: byName[fc.name]||null, item: it});
-                }
-              }
-            }
-          }
-        }
-      }
 
 
-      const itm: any = obj.item;
-      if (itm.pubDateMs && typeof itm.pubDateMs === 'number') return itm.pubDateMs;
-      const pubDateValue = itm.pubDate;
-      const rawDate = typeof pubDateValue === 'function' ? pubDateValue() : pubDateValue;
-      const dateObj = rawDate ? new Date(rawDate) : undefined;
-      return dateObj && !isNaN(dateObj.getTime()) ? dateObj.getTime() : 0;
-      } catch {
-    // Descending sort: newest items appear at the top of the UI group (matches user expectations)
-    collected.sort((a,b)=> extractDate(b)-extractDate(a));
-    }
-    
-    // Descending so la más reciente quede al inicio visualmente dentro de su grupo
-    collected.sort((a,b)=> extractDate(b)-extractDate(a));
-    listItems = collected;
-
-    buildGroups();
   }
 
   function buildGroups(){
@@ -208,13 +166,16 @@
         if (oa===2) return a[0] < b[0] ? 1 : -1;
         return 0;
       })
-      .map(([k,v])=> ({ key:k, label:v.label, items: v.items.sort((a,b)=> {
-        // Orden descendente (más reciente primero). Usar pubDateMs cuando exista.
-        const da = (a.item.pubDateMs && typeof a.item.pubDateMs==='number') ? a.item.pubDateMs
-          : new Date(a.item.pubDate || (typeof a.item.pubDate==='function'? a.item.pubDate():0)).getTime();
-        const db = (b.item.pubDateMs && typeof b.item.pubDateMs==='number') ? b.item.pubDateMs
-          : new Date(b.item.pubDate || (typeof b.item.pubDate==='function'? b.item.pubDate():0)).getTime();
-        return db - da; }) }));
+          .map(([k,v])=> ({ key:k, label:v.label, items: v.items.sort(sortItemsByDate) }));
+    
+      // Helper function for sorting items by date (descending, most recent first)
+      function sortItemsByDate(a: { item: any }, b: { item: any }) {
+        const da = (a.item.pubDateMs && typeof a.item.pubDateMs === 'number') ? a.item.pubDateMs
+          : new Date(a.item.pubDate || (typeof a.item.pubDate === 'function' ? a.item.pubDate() : 0)).getTime();
+        const db = (b.item.pubDateMs && typeof b.item.pubDateMs === 'number') ? b.item.pubDateMs
+          : new Date(b.item.pubDate || (typeof b.item.pubDate === 'function' ? b.item.pubDate() : 0)).getTime();
+        return db - da;
+      }
   }
 
   function refreshFavorites(rebuild = true){

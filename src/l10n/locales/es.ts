@@ -10,6 +10,7 @@ export default {
     open: "Abrir",
     refresh_feeds: "Actualizar feeds",
     create_all: "Crear todos",
+    regenerate_all: "Regenerar todos",
 
     //folder actions
     mark_all_as_read: "Marcar todo (global)",
