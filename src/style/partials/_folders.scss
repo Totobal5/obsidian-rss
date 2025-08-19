@@ -1,21 +1,77 @@
 /* Sidebar folders / feeds (extracted from FolderView.svelte) */
-.rss-fr-subs { display:flex; flex-direction:column; gap:4px; }
-.rss-top-actions { display:flex; gap:4px; }
-.rss-fr-subs button { background:transparent; border:0; font:inherit; text-align:left; }
-.rss-folder-wrapper, .rss-feed-line { display:flex; align-items:center; gap:4px; }
-.rss-folder-header, .rss-feed-header, .rss-all-feeds-button, .rss-favorites-button, .rss-mark-all-global, .rss-refresh-all {
-  padding:4px 6px; cursor:pointer; display:flex; align-items:center; gap:4px;
+.rss-fr-subs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
 }
-.rss-folder-header { flex:1; }
-.rss-feed-header { flex:1; justify-content:space-between; }
+
+.rss-top-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.rss-fr-subs button {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.rss-folder-wrapper,
+.rss-feed-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rss-folder-header { flex: 1; }
+
+.rss-feed-header {
+  flex: 1;
+  justify-content: space-between;
+}
+
 /* Active states */
-.rss-folder-header.active, .rss-feed-header.active, .rss-all-feeds-button.active, .rss-favorites-button.active {
+.rss-folder-header.active,
+.rss-feed-header.active,
+.rss-all-feeds-button.active,
+.rss-favorites-button.active {
   background: var(--background-modifier-hover);
-  border-radius:4px;
+  border-radius: 4px;
 }
+
 /* Count badge */
-.rss-item-count-badge { font-size:11px; background: var(--background-modifier-border); padding:2px 6px; border-radius:12px; }
+.rss-item-count-badge {
+  font-size: 11px;
+  background: var(--background-modifier-border);
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
 /* Collapse visuals */
-.rss-folder-group.collapsed .rss-folder-feeds { display:none; }
+.rss-folder-group.collapsed .rss-folder-feeds { display: none; }
+
 /* Ensure caret button minimal width */
-.rss-folder-caret-btn { width:18px; text-align:center; }
+.rss-folder-caret-btn {
+  width: 18px;
+  text-align: center;
+}
+
+.rss-fr-subs {
+  display: flex;
+  flex-direction: column;
+  height: 100%; // O una altura fija si tu contenedor principal no tiene altura
+}
+
+.rss-all-feeds-button,
+.rss-favorites-button {
+  flex: 0 0 auto;
+}
+
+.rss-folder-groups {
+  flex: 1 1 auto;
+  min-height: 0; // Necesario para scroll con flexbox
+  overflow-y: auto;
+}

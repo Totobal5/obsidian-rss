@@ -14,7 +14,7 @@ jest.unstable_mockModule('../src/parser/rssParser', () => ({
 
 describe('FeedUpdater preserves item state', () => {
   test('read/favorite flags stay true after refresh', async () => {
-    const { FeedUpdater } = await import('../src/services/FeedUpdater');
+    const { FeedUpdater } = await import('../src/services/FeedsManager');
     const plugin:any = new FakePlugin();
     const updater = new FeedUpdater(plugin);
     await updater.updateFeeds();

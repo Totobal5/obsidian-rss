@@ -5,12 +5,13 @@ export default {
 
     RSS_Reader: "RSS Reader",
     RSS_Feeds: "RSS Feeds",
-
+    regenerate_items: "Regenerar todos los elementos",
     //commands
     open: "Abrir",
     refresh_feeds: "Actualizar feeds",
     create_all: "Crear todos",
-
+    show_all_feeds: "Feeds",
+    
     //folder actions
     mark_all_as_read: "Marcar todo (global)",
     mark_folder_as_read: "Marcar carpeta como leída",
@@ -22,7 +23,8 @@ export default {
     folders: "Carpetas",
     folder: "Carpeta",
     feeds: "Feeds",
-
+    today: "Hoy",
+    yesterday: "Ayer",
     //article actions
     create_note: "crear nueva nota",
     paste_to_note: "pegar en la nota actual",

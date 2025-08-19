@@ -7,6 +7,18 @@ export enum FeedOrder {
 }
 
 
+/**
+ * Represents an RSS feed with its metadata and items.
+ *
+ * Provides methods to access feed properties such as ID, URL, title, name, favicon,
+ * unread item count, ordering, link, folder information, and the list of items.
+ *
+ * @remarks
+ * This interface abstracts the structure and behavior of a feed, allowing
+ * implementations to provide concrete logic for each property.
+ *
+ * @interface Feed
+ */
 export interface Feed {
     id(): number;
     url(): string;
@@ -20,4 +32,3 @@ export interface Feed {
     folderName(): string;
     items(): Item[];
 }
-

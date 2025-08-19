@@ -4,14 +4,31 @@ import {
     normalizePath,
     Notice,
     TextComponent,
-    MarkdownPreviewRenderer, moment
+    MarkdownPreviewRenderer,
+    moment
 } from "obsidian";
-import {TextInputPrompt} from "./modals/TextInputPrompt";
-import {FILE_NAME_REGEX} from "./consts";
+import { TextInputPrompt } from "./modals/TextInputPrompt";
+import { FILE_NAME_REGEX } from "./consts";
 import RssReaderPlugin from "./main";
 import t from "./l10n/locale";
-import type {Item} from "./providers/Item";
+import type { Item } from "./providers/Item";
+import type { Feed } from "./providers/Feed";
+import type { RssFeedContent, RssFeedItem } from "./parser/rssParser";
 
+/**
+ * Creates a new note in the Obsidian vault based on the provided RSS item.
+ *
+ * - Determines the directory to save the note, using either the active file's parent directory
+ *   or a custom location specified in plugin settings.
+ * - Generates a filename using a template and sanitizes it.
+ * - If `askForFilename` is enabled in settings, prompts the user for a filename and validates it.
+ * - Ensures the filename does not already exist in the vault and is valid.
+ * - Creates the new file with the specified or generated filename and content.
+ *
+ * @param plugin - The instance of the RssReaderPlugin containing app and settings.
+ * @param item - The RSS item to create the note from.
+ * @returns A promise that resolves when the note has been created.
+ */
 export async function createNewNote(plugin: RssReaderPlugin, item: Item): Promise<void> {
     console.log("creating new note");
     const activeFile = plugin.app.workspace.getActiveFile();
@@ -22,330 +39,482 @@ export async function createNewNote(plugin: RssReaderPlugin, item: Item): Promis
     }
 
     let filename = applyTemplate(plugin, item, plugin.settings.defaultFilename);
-    //make sure there are no slashes in the title.
     filename = filename.replace(/[\/\\:]/g, ' ');
 
     if (plugin.settings.askForFilename) {
-        const inputPrompt = new TextInputPrompt(plugin.app, t("specify_name"), t("cannot_contain") + " * \" \\ / < > : | ?", filename, filename);
-        await inputPrompt
-            .openAndGetValue(async (text: TextComponent) => {
-                const value = text.getValue();
-                if (value.match(FILE_NAME_REGEX)) {
-                    inputPrompt.setValidationError(text, t("invalid_filename"));
-                    return;
-                }
-                const filePath = normalizePath([dir, `${value}.md`].join('/'));
-
-                if (isInVault(filePath)) {
-                    inputPrompt.setValidationError(text, t("note_exists"));
-                    return;
-                }
-                inputPrompt.close();
-                await createNewFile(plugin, item, filePath, value);
-            });
+        const inputPrompt = new TextInputPrompt(
+            plugin.app,
+            t("specify_name"),
+            t("cannot_contain") + " * \" \\ / < > : | ?",
+            filename,
+            filename
+        );
+        await inputPrompt.openAndGetValue(async (text: TextComponent) => {
+            const value = text.getValue();
+            if (value.match(FILE_NAME_REGEX)) {
+                inputPrompt.setValidationError(text, t("invalid_filename"));
+                return;
+            }
+            const filePath = normalizePath([dir, `${value}.md`].join('/'));
+            if (isInVault(filePath)) {
+                inputPrompt.setValidationError(text, t("note_exists"));
+                return;
+            }
+            inputPrompt.close();
+            await createNewFile(plugin, item, filePath, value);
+        });
     } else {
         const replacedTitle = filename.replace(FILE_NAME_REGEX, '');
         const filePath = normalizePath([dir, `${replacedTitle}.md`].join('/'));
         await createNewFile(plugin, item, filePath, item.title());
     }
-
-
 }
 
-async function createNewFile(plugin: RssReaderPlugin, item: Item, path: string, title: string) {
+/**
+ * Creates a new file in the Obsidian vault using the provided RSS item and template.
+ * If the file already exists at the specified path, shows a notice and aborts.
+ * Otherwise, applies the template to the item, creates the file, opens it in edit mode,
+ * marks the item as created, updates the feed content, and shows a success notice.
+ *
+ * @param plugin - The instance of the RssReaderPlugin.
+ * @param item - The RSS item to use for file creation.
+ * @param path - The vault path where the new file will be created.
+ * @param title - The title to use in the template for the new file.
+ * @returns A promise that resolves when the file has been created and opened.
+ */
+async function createNewFile(
+    plugin: RssReaderPlugin,
+    item: Item,
+    path: string,
+    title: string
+): Promise<void> {
+    // Check if the file already exists in the vault
     if (isInVault(path)) {
         new Notice(t("note_exists"));
         return;
     }
 
-    const appliedTemplate = applyTemplate(plugin, item, plugin.settings.template, title);
+    // Apply the template to generate file content
+    const fileContent = applyTemplate(plugin, item, plugin.settings.template, title);
 
-    const file = await plugin.app.vault.create(path, appliedTemplate);
-    await plugin.app.workspace.getLeaf('tab').openFile(file, {
-        state: {mode: 'edit'},
-    });
+    const createdFile = await plugin.app.vault.create(path, fileContent);
+    await plugin.app.workspace.getLeaf('tab').openFile(createdFile, { state: { mode: 'edit' } });
 
+    // Mark the item as created
     item.markCreated(true);
-    const items = plugin.settings.items;
-    await plugin.writeFeedContent(() => {
-        return items;
-    });
+    await plugin.writeFeedContent(() => plugin.settings.items);
 
     new Notice(t("created_note"));
 }
 
+/**
+ * Pastes the content of an RSS item into the currently active note in Obsidian.
+ * Applies a template to the item, inserts it at the current cursor position,
+ * marks the item as created, writes the updated feed content, and shows a notification.
+ *
+ * @param plugin - The instance of the RssReaderPlugin.
+ * @param item - The RSS item to paste into the note.
+ * @returns A promise that resolves when the operation is complete.
+ */
 export async function pasteToNote(plugin: RssReaderPlugin, item: Item): Promise<void> {
     const file = plugin.app.workspace.getActiveFile();
-    if (file === null) {
+    if (!file) {
         new Notice(t("no_file_active"));
         return;
     }
 
     const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-    console.log(view);
-    if (view) {
-        const appliedTemplate = applyTemplate(plugin, item, plugin.settings.pasteTemplate);
-
-        const editor = view.editor;
-        editor.replaceRange(appliedTemplate, editor.getCursor());
-
-        item.markCreated(true);
-        const items = plugin.settings.items;
-        await plugin.writeFeedContent(() => {
-            return items;
-        });
-
-        new Notice(t("RSS_Reader") + t("inserted_article"));
-    }else {
+    if (!view) {
         new Notice("No view available");
+        return;
     }
+
+    const appliedTemplate = applyTemplate(plugin, item, plugin.settings.pasteTemplate);
+    view.editor.replaceRange(appliedTemplate, view.editor.getCursor());
+    item.markCreated(true);
+    await plugin.writeFeedContent(() => plugin.settings.items);
+    new Notice(t("RSS_Reader") + t("inserted_article"));
 }
 
+/**
+ * Applies a template to an RSS item, replacing placeholders with item data and formatting as specified.
+ *
+ * Supported placeholders in the template:
+ * - `{{title}}`: Item title
+ * - `{{link}}`: Item URL
+ * - `{{author}}`: Item author
+ * - `{{published}}`: Item published date (formatted)
+ * - `{{created}}`, `{{date}}`: Current date (formatted)
+ * - `{{feed}}`: Feed name
+ * - `{{folder}}`: Folder name
+ * - `{{description}}`: Item description
+ * - `{{media}}`: Media enclosure link
+ * - `{{tags}}`: Comma-separated tags
+ * - `{{#tags}}`: Comma-separated tags prefixed with `#`
+ * - `{{highlights}}`: Markdown list of highlights
+ * - `{{content}}`: Item body content, with highlights marked
+ * - `{{filename}}`: Provided filename (if any)
+ *
+ * Custom formatting:
+ * - `{{published:FORMAT}}`, `{{created:FORMAT}}`: Date formatted using `FORMAT` (e.g., `YYYY-MM-DD`)
+ * - `{{tags:SEPARATOR}}`, `{{#tags:SEPARATOR}}`: Tags joined by `SEPARATOR`
+ * - `{{highlights:TEMPLATE}}`: Highlights rendered using `TEMPLATE`, with `%%highlight%%` replaced by each highlight
+ *
+ * @param plugin - The RssReaderPlugin instance containing settings and utilities.
+ * @param item - The RSS item to apply the template to.
+ * @param template - The template string containing placeholders.
+ * @param filename - Optional filename to inject into the template.
+ * @returns The template string with all placeholders replaced by item data.
+ */
 function applyTemplate(plugin: RssReaderPlugin, item: Item, template: string, filename?: string): string {
-    let result = template.replace(/{{title}}/g, item.title());
-    result = result.replace(/{{link}}/g, item.url());
-    result = result.replace(/{{author}}/g, item.author());
-    result = result.replace(/{{published}}/g, moment(item.pubDate()).format(plugin.settings.dateFormat));
-    result = result.replace(/{{created}}/g, moment().format(plugin.settings.dateFormat));
-    result = result.replace(/{{date}}/g, moment().format(plugin.settings.dateFormat));
-    result = result.replace(/{{feed}}/g, item.feed());
-    result = result.replace(/{{folder}}/g, item.folder());
-    result = result.replace(/{{description}}/g, item.description());
-    result = result.replace(/{{media}}/g, item.enclosureLink);
+    let result = template
+        .replace(/{{title}}/g, item.title())
+        .replace(/{{link}}/g, item.url())
+        .replace(/{{author}}/g, item.author())
+        .replace(/{{published}}/g, moment(item.pubDate()).format(plugin.settings.dateFormat))
+        .replace(/{{created}}/g, moment().format(plugin.settings.dateFormat))
+        .replace(/{{date}}/g, moment().format(plugin.settings.dateFormat))
+        .replace(/{{feed}}/g, item.feed())
+        .replace(/{{folder}}/g, item.folder())
+        .replace(/{{description}}/g, item.description())
+        .replace(/{{media}}/g, item.enclosureLink);
 
-    result = result.replace(/({{published:).*(}})/g, function (k) {
-        const value = k.split(":")[1];
-        const format = value.substring(0, value.indexOf("}"));
-        return moment(item.pubDate()).format(format);
-    });
+    // Custom date formatting
+    result = result.replace(/{{published:([^}]+)}}/g, (_, format) =>
+        moment(item.pubDate()).format(format)
+    );
+    result = result.replace(/{{created:([^}]+)}}/g, (_, format) =>
+        moment().format(format)
+    );
 
-    result = result.replace(/({{created:).*(}})/g, function (k) {
-        const value = k.split(":")[1];
-        const format = value.substring(0, value.indexOf("}"));
-        return moment().format(format);
-    });
+    // Custom tag formatting
+    result = result.replace(/{{tags:([^}]+)}}/g, (_, sep) =>
+        item.tags().join(sep)
+    );
+    result = result.replace(/{{#tags:([^}]+)}}/g, (_, sep) =>
+        item.tags().map(tag => `#${tag}`).join(sep)
+    );
 
-    result = result.replace(/({{tags:).*(}})/g, function (k) {
-        const value = k.split(":")[1];
-        const separator = value.substring(0, value.indexOf("}"));
-        return item.tags().join(separator);
-    });
+    result = result
+        .replace(/{{tags}}/g, item.tags().join(", "))
+        .replace(/{{#tags}}/g, item.tags().map(tag => `#${tag}`).join(", "));
 
-    result = result.replace(/({{#tags:).*(}})/g, function (k) {
-        const value = k.split(":")[1];
-        const separator = value.substring(0, value.indexOf("}"));
-        return item.tags().map(i => '#' + i).join(separator);
-    });
+    // Highlights
+    result = result.replace(/{{highlights}}/g,
+        item.highlights().map(value =>
+            `- ${rssToMd(plugin, removeFormatting(value).replace(/^(-+)/, ""))}`
+        ).join("\n")
+    );
 
-    result = result.replace(/{{tags}}/g, item.tags().join(", "));
-    result = result.replace(/{{#tags}}/g, item.tags().map(i => '#' + i).join(", "));
-
-
-
-    result = result.replace(/{{highlights}}/g, item.highlights().map(value => {
-        //remove wallabag.xml - from the start of a highlight
-        return "- " + rssToMd(plugin, removeFormatting(value).replace(/^(-+)/, ""))
-    }).join("\n"));
-
-    result = result.replace(/({{highlights:)[\s\S][^}]*(}})/g, function (k) {
-        const value = k.split(/(:[\s\S]?)/);
-        const tmp = value.slice(1).join("");
-        const template = tmp.substring(1, tmp.indexOf("}"));
-        return item.highlights().map(i => {
-            return template.replace(/%%highlight%%/g, rssToMd(plugin, removeFormatting(i)).replace(/^(-+)/, ""));
-        }).join("");
-    });
+    result = result.replace(/{{highlights:([^}]+)}}/g, (_, highlightTemplate) =>
+        item.highlights().map(highlight =>
+            highlightTemplate.replace(/%%highlight%%/g, rssToMd(plugin, removeFormatting(highlight)).replace(/^(-+)/, ""))
+        ).join("")
+    );
 
     if (filename) {
         result = result.replace(/{{filename}}/g, filename);
     }
 
-
+    // Content
     let content = rssToMd(plugin, item.body());
-
     item.highlights().forEach(highlight => {
         const mdHighlight = htmlToMarkdown(highlight);
-        content = content.replace(mdHighlight, "==" + mdHighlight + "==");
-
-
+        content = content.replace(mdHighlight, `==${mdHighlight}==`);
     });
-    /*
-    fixes #48
-    replacing $ with $$$, because that is a special regex character:
-    https://developer.mozilla.org/en-US/docs/web/javascript/reference/global_objects/string/replace#specifying_a_string_as_a_parameter
-    solution taken from: https://stackoverflow.com/a/22612228/5589264
-    */
     content = content.replace(/\$/g, "$$$");
-
-
     result = result.replace(/{{content}}/g, content);
 
     return result;
 }
 
+/**
+ * Removes specific formatting from an HTML string.
+ *
+ * This function parses the input HTML and performs the following operations:
+ * - Removes all custom data attributes from anchor (`<a>`) elements within the `<body>`.
+ * - Removes all `<object>` elements from the document.
+ * - Returns the resulting HTML as a string.
+ *
+ * @param html - The HTML string to process.
+ * @returns The cleaned HTML string with formatting removed.
+ */
 function removeFormatting(html: string): string {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const elements = doc.querySelectorAll("html body a");
-    for (let i = 0; i < elements.length; i++) {
-        const el = elements.item(i) as HTMLAnchorElement;
-        if (el.dataset) {
-            Object.keys(el.dataset).forEach(key => {
-                delete el.dataset[key];
-            });
-        }
-    }
-
-    const objects = doc.querySelectorAll("object");
-    for (let i = 0; i < objects.length; i++) {
-        const object = objects.item(i) as HTMLObjectElement;
-        object.remove();
-    }
-
+    doc.querySelectorAll("html body a").forEach(el => {
+        const htmlEl = el as HTMLElement;
+        if (htmlEl.dataset) Object.keys(htmlEl.dataset).forEach(key => delete htmlEl.dataset[key]);
+    });
+    doc.querySelectorAll("object").forEach(object => object.remove());
     return doc.documentElement.innerHTML;
 }
 
+/**
+ * Opens a given item's URL in a new browser tab.
+ *
+ * The function attempts to extract a valid URL from the provided `item` object.
+ * It checks for the following properties in order:
+ * - `url`: If it's a function, calls it and uses its return value if it's a non-empty string.
+ * - `link`: Uses its value if it's a string.
+ * - `href`: Uses its value if it's a string.
+ *
+ * Only URLs starting with `http://` or `https://` are considered valid.
+ * If a valid URL is found, it opens the link in a new tab with `noopener` and `noreferrer` for security.
+ * Any errors encountered during the process are logged to the console.
+ *
+ * @param item - The object containing the URL information. Can be of type `Item` or any other type.
+ */
 export function openInBrowser(item: Item | any): void {
     try {
-        // Prefer method url() if exists
         let link: string | undefined;
         if (item && typeof item.url === 'function') {
             const v = item.url();
             if (typeof v === 'string' && v.length) link = v;
         }
-        // Fallback to common raw properties (raw feed item objects passed directly to ItemModal)
         if (!link && item && typeof item.link === 'string') link = item.link;
         if (!link && item && typeof item.href === 'string') link = item.href;
-        if (!link) return; // nothing to open
-        // Basic protocol safety
-        if (!/^https?:\/\//i.test(link)) return;
+        if (!link || !/^https?:\/\//i.test(link)) return;
         window.open(link, '_blank', 'noopener,noreferrer');
     } catch (e) {
         console.warn('[rss] openInBrowser failed', e);
     }
 }
 
+// Pre-compiled regexes for rssToMd
+const TEMPLATER_REGEX = /<%([\s\S]*?)%>/g;
+const WALLABAG_CODEBLOCK_REGEX = /^```[\w-]*\n([\s\S]*?)```$/gm;
+const SCRIPT_TAG_REGEX = /<script[\s\S]*?<\/script>/gi;
+const EMBED_REGEX = /!?\[(.*)\]\(.+\)/gm;
+
+/**
+ * Converts RSS feed HTML content to Markdown, applying various transformations and plugin-specific formatting.
+ *
+ * - Converts HTML to Markdown.
+ * - Improves blockquote parsing and centers standalone images.
+ * - Adds compatibility for Dataview and Templater plugins by wrapping queries and templates in appropriate code blocks.
+ * - Handles Wallabag codeblocks and removes script tags if necessary.
+ * - Optionally removes media embeds based on plugin settings.
+ *
+ * @param plugin - The RssReaderPlugin instance containing app and settings.
+ * @param content - The HTML content from the RSS feed to be converted.
+ * @returns The transformed Markdown string.
+ */
 export function rssToMd(plugin: RssReaderPlugin, content: string): string {
-
     let markdown = htmlToMarkdown(content);
-
-    // Mejorar parsing de blockquotes
     markdown = improveBlockquoteParsing(markdown, content);
-    
-    // Mejorar manejo de imágenes standalone para centrarlas
     markdown = centerStandaloneImages(markdown);
 
-    //If dataview is installed
+    // Dataview plugin support
     if ((plugin.app as any).plugins.plugins["dataview"]) {
-        //wrap dataview inline code
-        const {
-            inlineQueryPrefix,
-            inlineJsQueryPrefix
-        } = (plugin.app as any).plugins.plugins.dataview.api.settings as { [key: string]: string };
-        markdown = markdown.replace(RegExp(`\`${escapeRegExp(inlineQueryPrefix)}.*\``, 'g'), "<pre>$&</pre>");
-        markdown = markdown.replace(RegExp(`\`${escapeRegExp(inlineJsQueryPrefix)}.*\``, 'g'), "<pre>$&</pre>");
+        const { inlineQueryPrefix, inlineJsQueryPrefix } = (plugin.app as any).plugins.plugins.dataview.api.settings as { [key: string]: string };
+        const inlineQueryRegex = new RegExp(`\`${escapeRegExp(inlineQueryPrefix)}.*\``, 'g');
+        const inlineJsQueryRegex = new RegExp(`\`${escapeRegExp(inlineJsQueryPrefix)}.*\``, 'g');
+        markdown = markdown.replace(inlineQueryRegex, "<pre>$&</pre>");
+        markdown = markdown.replace(inlineJsQueryRegex, "<pre>$&</pre>");
     }
 
-    //If templater is installed
+    // Templater plugin support
     if ((plugin.app as any).plugins.plugins["templater-obsidian"]) {
-        //wrap templater commands
-        markdown = markdown.replace(/<%([\s\S]*?)%>/g, "```javascript\n$&\n```");
+        markdown = markdown.replace(TEMPLATER_REGEX, "```javascript\n$&\n```");
     }
 
-    //wrap wallabag.xml codeblocks where there is a processor registered.
-    //as codeblockProcessors is not exposed publicly(and seems to be only existent after v.13) do a check first
-    //@ts-ignore
-    if (typeof MarkdownPreviewRenderer !== 'undefined' && MarkdownPreviewRenderer.codeBlockPostProcessors) {
-        //@ts-ignore
-        const codeblockProcessors: string[] = Object.keys(MarkdownPreviewRenderer.codeBlockPostProcessors);
-        for (const codeblockProcessor of codeblockProcessors) {
-            const regex = RegExp("^```" + codeblockProcessor + "\[\\s\\S\]*?```$", "gm");
-            markdown = markdown.replace(regex, "<pre>$&</pre>");
-        }
-    } else if (typeof MarkdownPreviewRenderer !== 'undefined') {
-        //just remove wallabag.xml codeblocks instead
-        markdown = markdown.replace(/^```.*\n([\s\S]*?)```$/gm, "<pre>$&</pre>");
+    // Wallabag codeblock handling
+    if (typeof MarkdownPreviewRenderer !== 'undefined') {
+        // Generic code block handling: wrap all code blocks in <pre> tags
+        markdown = markdown.replace(WALLABAG_CODEBLOCK_REGEX, "<pre>$&</pre>");
     } else {
-        // Test environment or no renderer: perform minimal sanitization only
-        markdown = markdown.replace(/<script[\s\S]*?<\/script>/gi,'');
+        markdown = markdown.replace(SCRIPT_TAG_REGEX, '');
     }
 
+    // Remove embeds if media display is disabled
     if (!plugin.settings.displayMedia) {
-        //remove any embeds, but keep alias
-        markdown = markdown.replace(/!?\[(.*)\]\(.+\)/gm, "$1");
+        markdown = markdown.replace(EMBED_REGEX, "$1");
     }
     return markdown;
 }
 
+// Pre-compiled regex for blockquote parsing
+const BLOCKQUOTE_REGEX = /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi;
+
+/**
+ * Enhances the given Markdown string by parsing blockquotes from the provided HTML string
+ * and appending them in Markdown blockquote format if they are not already present.
+ *
+ * This function searches for `<blockquote>` elements in the original HTML, extracts their content,
+ * removes any HTML tags, and converts each line into Markdown blockquote syntax (`> ...`).
+ * If the generated blockquote is not already present in the Markdown (checked by substring match),
+ * it appends the blockquote to the Markdown string.
+ *
+ * @param markdown - The original Markdown string to be improved.
+ * @param originalHtml - The HTML string containing potential blockquotes to parse.
+ * @returns The improved Markdown string with additional blockquotes appended if found in the HTML.
+ */
 function improveBlockquoteParsing(markdown: string, originalHtml: string): string {
-    // Si el HTML original contiene blockquotes, asegurar que se conviertan correctamente
-    const blockquoteRegex = /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi;
-    const matches = originalHtml.match(blockquoteRegex);
-    
-    if (matches) {
-        for (const match of matches) {
-            // Extraer el contenido del blockquote
-            const content = match.replace(/<blockquote[^>]*>/, '').replace(/<\/blockquote>/, '');
-            // Limpiar HTML interno y convertir a texto
-            const cleanContent = content.replace(/<[^>]+>/g, '').trim();
-            
-            if (cleanContent) {
-                // Crear blockquote markdown proper
-                const blockquoteMarkdown = cleanContent
-                    .split('\n')
-                    .map(line => line.trim() ? `> ${line.trim()}` : '>')
-                    .join('\n');
-                
-                // Si no existe ya un blockquote similar en el markdown, agregarlo
-                if (!markdown.includes(blockquoteMarkdown.substring(0, 50))) {
-                    markdown += '\n\n' + blockquoteMarkdown + '\n';
-                }
-            }
+    const blockquoteMatches = originalHtml.match(BLOCKQUOTE_REGEX);
+
+    if (!blockquoteMatches) {
+        return markdown;
+    }
+
+    for (const blockquoteHtml of blockquoteMatches) {
+        // Extract inner content of blockquote
+        const innerContent = blockquoteHtml
+            .replace(/<blockquote[^>]*>/, '')
+            .replace(/<\/blockquote>/, '');
+
+        // Remove all HTML tags and trim whitespace
+        const plainText = innerContent.replace(/<[^>]+>/g, '').trim();
+
+        if (!plainText) {
+            continue;
+        }
+
+        // Convert each line to Markdown blockquote format
+        const blockquoteMd = plainText
+            .split('\n')
+            .map(line => line.trim() ? `> ${line.trim()}` : '>')
+            .join('\n');
+
+        // Only append if not already present in markdown
+        if (!markdown.includes(blockquoteMd.substring(0, 50))) {
+            markdown += `\n\n${blockquoteMd}\n`;
         }
     }
-    
+
     return markdown;
 }
 
+// Pre-compiled regex for standalone images between blank lines
+const STANDALONE_IMAGE_PATTERN = /(\n\s*\n)\s*(!?\[[^\]]*\]\([^)]+\))\s*(\n\s*\n)/g;
+
+/**
+ * Centers standalone images in the provided Markdown string by wrapping them in a <div align="center">.
+ * Images with alt text longer than 50 characters are not centered.
+ *
+ * @param markdown - The Markdown string to process.
+ * @returns The Markdown string with standalone images centered, except those with detailed alt text.
+ */
 function centerStandaloneImages(markdown: string): string {
-    // Centrar imágenes que están solas en su línea (no tienen texto cerca)
-    // Pattern: línea vacía + imagen + línea vacía
-    const standaloneImagePattern = /(\n\s*\n)\s*(!?\[[^\]]*\]\([^)]+\))\s*(\n\s*\n)/g;
-    
-    return markdown.replace(standaloneImagePattern, (match, before, image, after) => {
-        // Solo centrar si la imagen no tiene texto descriptivo largo
-        const altText = image.match(/!\[([^\]]*)\]/);
-        const hasDetailedAlt = altText && altText[1] && altText[1].length > 50;
-        
-        if (!hasDetailedAlt) {
-            return `${before}<div align="center">\n\n${image}\n\n</div>${after}`;
+    return markdown.replace(STANDALONE_IMAGE_PATTERN, (fullMatch, before, imageMarkdown, after) => {
+        // Extract alt text from image markdown
+        const altTextMatch = imageMarkdown.match(/!\[([^\]]*)\]/);
+        const altText = altTextMatch ? altTextMatch[1] : "";
+        const isDetailedAlt = altText.length > 50;
+
+        // Center image if alt text is not too long
+        if (!isDetailedAlt) {
+            return `${before}<div align="center">\n\n${imageMarkdown}\n\n</div>${after}`;
         }
-        return match;
+        return fullMatch;
     });
 }
 
-function escapeRegExp(string: string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+const ESCAPE_REGEXP_REGEX = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * Escapes special characters in a string to be used safely within a regular expression.
+ *
+ * This function replaces characters that have special meaning in regular expressions
+ * (such as `.`, `*`, `+`, `?`, `^`, `$`, `{`, `}`, `(`, `)`, `|`, `[`, `]`, `\`)
+ * with their escaped counterparts.
+ *
+ * @param string - The input string to escape.
+ * @returns The escaped string, safe for use in regular expressions.
+ */
+function escapeRegExp(string: string): string {
+    return string.replace(ESCAPE_REGEXP_REGEX, '\\$&');
 }
 
-//the code below is taken from https://github.com/obsidian-community/obsidian-community-lib
+/**
+ * Checks if a note exists in the Obsidian vault by verifying if a link path destination can be resolved.
+ *
+ * @param noteName - The name of the note to check for existence in the vault.
+ * @param sourcePath - (Optional) The source path from which to resolve the link. Defaults to an empty string.
+ * @returns `true` if the note exists in the vault, otherwise `false`.
+ */
 function isInVault(noteName: string, sourcePath: string = ""): boolean {
     return !!app.metadataCache.getFirstLinkpathDest(noteName, sourcePath);
 }
 
 /**
- * Copy `content` to the users clipboard.
+ * Copies the provided content string to the clipboard.
  *
- * @param {string} content The content to be copied to clipboard.
- * @param {() => any} success The callback to run when text is successfully copied. Default throws a new `Notice`
- * @param {(reason?) => any} failure The callback to run when text was not able to be copied. Default throws a new `Notice`, and console logs the error.`
+ * @param content - The string content to copy to the clipboard.
+ * @param success - Optional callback invoked on successful copy. Defaults to showing a "Copied to clipboard" notice.
+ * @param failure - Optional callback invoked if the copy fails. Defaults to showing a failure notice and logging the reason.
+ * @returns A Promise that resolves when the copy operation completes.
  */
 export async function copy(
     content: string,
     success: () => any = () => new Notice("Copied to clipboard"),
     failure: (reason?: any) => any = (reason) => {
         new Notice("Could not copy to clipboard");
-        console.log({reason});
+        console.log({ reason });
     }
 ) {
     await navigator.clipboard.writeText(content).then(success, failure);
+}
+
+
+/**
+ * Converts a raw `RssFeedItem` object into an `Item` object with getter and setter methods.
+ *
+ * Each property of the returned `Item` is accessed via a function, allowing for dynamic retrieval and mutation of values.
+ * Setter methods are provided for properties that can be updated, such as `markStarred`, `markRead`, `setTags`, and `markCreated`.
+ *
+ * @param raw - The raw RSS feed item to convert.
+ * @returns An `Item` object with methods to access and modify its properties.
+ */
+export function toItem(raw: RssFeedItem): Item {
+    return {
+        id: () => raw.id,
+        guid: () => raw.id,
+        guidHash: () => raw.hash,
+        url: () => raw.link,
+        title: () => raw.title,
+        author: () => raw.creator,
+        pubDate: () => raw.pubDate,
+        body: () => raw.content,
+        description: () => raw.description,
+        feedId: () => 0,
+        read: () => !!raw.read,
+        starred: () => !!raw.favorite,
+        rtl: () => false,
+        mediaThumbnail: () => raw.image,
+        mediaDescription: () => raw.description,
+        enclosureMime: () => raw.enclosureType,
+        enclosureLink: () => raw.enclosure,
+        markStarred: (starred: boolean) => { raw.favorite = starred; },
+        markRead: (read: boolean) => { raw.read = read; },
+        tags: () => raw.tags || [],
+        setTags: (tags: string[]) => { raw.tags = tags; },
+        created: () => !!raw.created,
+        markCreated: (created: boolean) => { raw.created = created; },
+        language: () => raw.language,
+        highlights: () => raw.highlights || [],
+        folder: () => raw.folder,
+        feed: () => raw.feed,
+    };
+}
+
+/**
+ * Converts a raw `RssFeedContent` object into a `Feed` object with computed properties.
+ *
+ * @param raw - The raw RSS feed content to transform.
+ * @returns A `Feed` object with properties derived from the raw feed content.
+ */
+export function toFeed(raw: RssFeedContent): Feed {
+    return {
+        id: () => 0,
+        url: () => raw.link,
+        title: () => raw.title,
+        name: () => raw.name,
+        favicon: () => raw.image,
+        unreadCount: () => raw.items.filter(i => !i.read).length,
+        ordering: () => 0,
+        link: () => raw.link,
+        folderId: () => 0,
+        folderName: () => raw.folder,
+        items: () => raw.items.map(toItem),
+    };
 }

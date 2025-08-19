@@ -3,10 +3,33 @@ import type RssReaderPlugin from '../main';
 import { VIEW_ID } from '../consts';
 import t from '../l10n/locale';
 
-// New simplified Svelte-only view loader.
+
+
+/**
+ * Represents the main view loader for the RSS Reader plugin in Obsidian.
+ * 
+ * This class extends `ItemView` and is responsible for initializing, mounting,
+ * and destroying the Svelte-based UI for displaying RSS feeds. It manages the
+ * lifecycle of the view, including handling responsive behavior via a
+ * `ResizeObserver`, and provides compatibility methods for legacy calls.
+ * 
+ * @remarks
+ * - The Svelte root component is dynamically imported and mounted to a host element.
+ * - Responsive behavior is reserved for future implementation.
+ * - Compatibility methods (`updateFavoritesCounter`, `refreshSidebarCounts`) are no-ops.
+ * 
+ * @example
+ * ```typescript
+ * const viewLoader = new ViewLoader(leaf, plugin);
+ * await viewLoader.onOpen();
+ * // ... interact with the view ...
+ * await viewLoader.onClose();
+ * ```
+ */
 export default class ViewLoader extends ItemView {
     private readonly plugin: RssReaderPlugin;
-        private hostEl?: HTMLDivElement; // Obsidian createDiv returns HTMLElement with extended helpers
+    // Obsidian createDiv returns HTMLElement with extended helpers
+    private hostEl?: HTMLDivElement;
     private svelteInstance: any;
     private resizeObserver?: ResizeObserver;
 
@@ -15,9 +38,17 @@ export default class ViewLoader extends ItemView {
         this.plugin = plugin;
     }
 
-    getDisplayText(): string { return t('RSS_Feeds'); }
-    getViewType(): string { return VIEW_ID; }
-    getIcon(): string { return 'rss'; }
+    public getDisplayText(): string { 
+        return t('RSS_Feeds'); 
+    }
+
+    public getViewType(): string {
+        return VIEW_ID; 
+    }
+
+    public getIcon(): string {
+        return 'rss'; 
+    }
 
     protected async onOpen(): Promise<void> {
         const container = this.containerEl.children[1] as HTMLElement; // .view-content
@@ -26,6 +57,7 @@ export default class ViewLoader extends ItemView {
         this.hostEl = container.createDiv({ cls: 'rss-svelte-host' }) as HTMLDivElement;
         this.resizeObserver = new ResizeObserver(() => {/* reserved for future responsive behavior */});
         this.resizeObserver.observe(this.hostEl as unknown as Element);
+        
         await this.mountSvelte();
     }
 
@@ -50,8 +82,4 @@ export default class ViewLoader extends ItemView {
             this.hostEl.createEl('div', { text: 'Failed to load UI' });
         }
     }
-
-    // Compatibility no-ops kept for legacy calls until fully removed.
-    async updateFavoritesCounter(): Promise<void> { /* handled within Svelte */ }
-    refreshSidebarCounts(): void { /* handled within Svelte */ }
 }

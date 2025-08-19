@@ -15,7 +15,7 @@ jest.unstable_mockModule('../src/parser/rssParser', () => ({
 
 describe('FeedUpdater', () => {
   test('updateFeeds merges new feed items', async () => {
-    const { FeedUpdater } = await import('../src/services/FeedUpdater');
+    const { FeedUpdater } = await import('../src/services/FeedsManager');
     const plugin:any = new FakePlugin();
     const updater = new FeedUpdater(plugin);
     await updater.updateFeeds();
