@@ -65,7 +65,7 @@ export class ItemStateService {
         try {
             document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {
                 detail: { link: item.url(), favorite: newFav }
-            }));
+            }) );
         } catch (e) {
             console.warn('Failed to dispatch favorite events:', e);
         }
