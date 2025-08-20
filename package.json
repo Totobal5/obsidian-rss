@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+  "build:verbose": "cross-env VERBOSE_SCSS=1 node esbuild.config.mjs production",
     "lint": "eslint . --ext .ts",
     "lint-css": "stylelint src/style/main.scss",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config ./jest.config.mjs --coverage",

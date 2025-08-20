@@ -335,7 +335,7 @@ export default class RssReaderPlugin extends Plugin {
             console.warn('Debounced write failed', e); 
         }
     }
-
+    
     // Keep only one writeFeeds method
     async writeFeeds(changeOpts: (feeds: RssFeed[]) => Partial<RssFeed[]>): Promise<void> {
         await feedsStore.update((old) => ({...old, ...changeOpts(old)}));

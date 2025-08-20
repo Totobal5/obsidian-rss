@@ -129,18 +129,15 @@
         } catch { return undefined; }
     }
 
-    function deriveThumb(it: Item): string | undefined {
+    function deriveThumb(item: Item): string | undefined {
         try {
-            if (it.image) return it.image;
-            if (typeof it.mediaThumbnail === 'function') {
-                const v = it.mediaThumbnail();
-                if (v) return v;
-            }
-
-            if (it.mediaThumbnail && typeof it.mediaThumbnail === 'string') return it.mediaThumbnail;
-            const html = typeof it.content === 'function' ? it.content() : it.content || it.description;
-
-            return firstImageFromHtml(html || '');
+          const image = item.mediaThumbnail();
+          if (image) {
+            return image;
+          } else {
+            const html = item.body();
+            if (html) return firstImageFromHtml(html || '');
+          }
         } catch { return undefined; }
     }
 
@@ -330,13 +327,13 @@
 
     async function markFeedAsRead(feed: Feed){
         const affectedLinks: string[] = [];
-
+        // Use feedsManager to access feed content
         await plugin.writeFeedContentDebounced((items) => {
             for (const fc of items) {
-                if ((fc.name===feed.name()||fc.link===feed.link()) && Array.isArray(fc.items)) {
+                if (fc.name === feed.name() || fc.link === feed.url() && Array.isArray(fc.items)) {
                     for (const it of fc.items) {
-                    it.read = true;
-                    if (it.link) affectedLinks.push(it.link);
+                        it.read = true;
+                        if (it.link) affectedLinks.push(it.link);
                     }
                 }
             }
@@ -351,36 +348,42 @@
         dispatchCounts();
     }
 
-    function toggleFavorite(raw: Item){
-        plugin.itemStateService.toggleFavorite(raw);
+    function toggleFavorite(item: Item) {
+        plugin.itemStateService.toggleFavorite(item);
         refreshFavorites(false);
         try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED)); } catch {}
         
         countsVersion++;
     }
 
-    function toggleRead(raw: Item){
-        plugin.itemStateService.toggleRead(raw);
+    function toggleRead(item: Item) {
+        plugin.itemStateService.toggleRead(item);
         // counts will update via event listeners; ensure repaint for badge cases
         countsVersion++;
     }
 
-    function openFavorites(){
+    function openFavorites() {
         favoritesMode = true;
         refreshFavorites();
-        activeFeedName = null; activeFolderName = null;
+        
+        activeFeedName = null;
+        activeFolderName = null;
+        
         countsVersion++;
     }
 
-    function openAllFeeds(){
+    function openAllFeeds() {
         favoritesMode = false;
-        activeFeedName = null; activeFolderName = null;
+        activeFeedName = null;
+        activeFolderName = null;
+        
         setActiveFeeds(allFeeds);
         rebuildList();
+
         countsVersion++;
     }
 
-    function openFolder(feeds: Feed[]){
+    function openFolder(feeds: Feed[]) {
         favoritesMode = false;
         const map = feedFolderLookup();
         let name: string|null = null;
@@ -395,15 +398,17 @@
         activeFeedName = null;
         setActiveFeeds(feeds);
         rebuildList();
+
         countsVersion++;
     }
 
-    function openFeed(feed: Feed){
+    function openFeed(feed: Feed) {
         activeFeedName = feed.name();
         activeFolderName = feed.folderName();
         
         setActiveFeeds([feed]);
         rebuildList();
+
         countsVersion++;
     }
 
@@ -535,7 +540,7 @@
         }, { passive: true });
 
         document.addEventListener(RSS_EVENTS.FAVORITE_UPDATED, () => {
-            refreshFavorites();
+            refreshFavorites(true);
             recomputeCountMaps(); // Recalculate favorite count
             countsVersion++;
         }, { passive: true });
@@ -579,7 +584,7 @@
             <div class="rss-fr-group-header">{g.label}</div>
             {#each g.items as obj (obj.item.url())}
                 <ListItem
-                    feed={obj.feed}
+                    feed={obj.feed || ''}
                     item={obj.item}
                     {deriveThumb}
                     {summary}

@@ -20,15 +20,41 @@ https://github.com/joethei/obisidian-rss
 
 const prod = (process.argv[2] === 'production');
 
+const verbose = Boolean(process.env.VERBOSE_SCSS);
+
 const copyMinifiedCSS = {
     name: 'minify-css',
     setup: (build) => {
         build.onEnd(async () => {
-            const {css} = sass.compile('src/style/main.scss');
+            if (verbose) {
+                console.log('[scss] Iniciando compilación SCSS main.scss');
+                console.time('[scss] Tiempo compilación');
+            }
+            let css;
+            try {
+                const r = sass.compile('src/style/main.scss', {
+                    style: prod ? 'compressed' : 'expanded',
+                    logger: {
+                        warn(message, opts) {
+                            console.warn('[scss][warn]', message, opts?.span?.url ? `@ ${opts.span.url}:${opts.span.start.line+1}` : '');
+                        }
+                    }
+                });
+                css = r.css;
+            } catch (err) {
+                console.error('[scss][error] Falló la compilación SCSS');
+                console.error(err);
+                return; // no continuar para evitar escribir archivo corrupto
+            }
+            if (verbose) {
+                console.timeEnd('[scss] Tiempo compilación');
+                console.log('[scss] Longitud CSS base:', css.length.toLocaleString(),'bytes');
+            }
             let result;
             if (prod) {
                 const content = `${banner}\n${css}`;
                 const preset = defaultPreset({discardComments: false});
+                if (verbose) console.log('[scss] Aplicando autoprefixer + cssnano');
                 result = await postcss([cssnano({
                     preset: preset,
                     plugins: [
@@ -37,19 +63,24 @@ const copyMinifiedCSS = {
                 })]).process(content, { from: 'src/style/main.scss' });
             } else {
                 const content = `${banner}\n${css}`;
+                if (verbose) console.log('[scss] Aplicando autoprefixer (modo dev)');
                 result = await postcss([autoprefixer]).process(content, { from: 'src/style/main.scss' });
             }
 
             // Base SCSS output
             fs.writeFileSync('build/styles.css', result.css, {encoding: 'utf-8'});
+            if (verbose) {
+                console.log('[scss] Escrito build/styles.css tamaño final:', result.css.length.toLocaleString(),'bytes');
+            }
             // If esbuild produced a component css bundle (main.css), append & remove
             try {
                 if (fs.existsSync('build/main.css')) {
                     const compCss = fs.readFileSync('build/main.css','utf-8');
                     fs.appendFileSync('build/styles.css','\n/* Component CSS */\n'+compCss,'utf-8');
                     fs.unlinkSync('build/main.css');
+                    if (verbose) console.log('[scss] CSS de componentes inyectado');
                 }
-            } catch { /* ignore */ }
+            } catch (e) { if (verbose) console.warn('[scss] No se pudo anexar main.css', e?.message); }
         })
     }
 }
@@ -78,7 +109,7 @@ const buildOptions = {
     }), copyManifest, copyMinifiedCSS],
     format: 'cjs',
     target: 'es2016',
-    logLevel: "info",
+    logLevel: verbose ? 'debug' : 'info',
     sourcemap: prod ? false : 'inline',
     treeShaking: true,
     outfile: 'build/main.js',

@@ -2,6 +2,8 @@ import type RssReaderPlugin from '../main';
 import {RSS_EVENTS} from '../events';
 import t from '../l10n/locale';
 import {Notice} from 'obsidian';
+import type { Item } from 'src/providers/Item';
+import type { RssFeedContent, RssFeedItem } from 'src/parser/rssParser';
 
 /**
  * Service class for managing the state of RSS feed items, such as read/unread and favorite status.
@@ -49,24 +51,21 @@ export class ItemStateService {
         return newState;
     }
 
-    async toggleFavorite(wrapperOrRaw: any): Promise<boolean> {
-        const raw = (wrapperOrRaw && wrapperOrRaw.item) ? wrapperOrRaw.item : wrapperOrRaw;
-        const newFav = !raw.favorite;
-        raw.favorite = newFav;
+    async toggleFavorite(item: Item): Promise<boolean> {
+        console.log('[toggleFavorite] called with:', item);
+        const newFav = !item.starred();
+        console.log('[toggleFavorite] newFav:', newFav);
 
-        // Use the unified write method with proper mutator
         await this.plugin.writeFeedContentDebounced((items) => {
-            this.syncRawInItems(items, raw, {favorite: newFav});
+            this.syncRawInItems(items, item, {starred: newFav});
         }, 250);
 
-        // Show notice
         new Notice(newFav ? t('added_to_favorites') : t('removed_from_favorites'));
 
-        // Dispatch events
-        try { 
+        try {
             document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {
-            detail: { link: raw.link, favorite: newFav }
-            })); 
+                detail: { link: item.url(), favorite: newFav }
+            }));
         } catch (e) {
             console.warn('Failed to dispatch favorite events:', e);
         }
@@ -78,13 +77,14 @@ export class ItemStateService {
      * Updates the raw item fields in the items array
      * @private
      */
-    private syncRawInItems(items: any[], raw: any, fields: Record<string, any>): void {
-        for (const feedContent of items) {
+    private syncRawInItems(raw: RssFeedContent[], item: Item, fields: Record<string, any>): void {
+        for (const feedContent of raw) {
             if (!feedContent || !Array.isArray(feedContent.items)) continue;
-            const match = feedContent.items.find((i: any) => i.link === raw.link);
-            if (match) { 
-            Object.assign(match, fields); 
-            break; 
+            const match = feedContent.items.find((i: RssFeedItem) => i.link === item.url());
+
+            if (match) {
+                Object.assign(match, fields);
+                break;
             }
         }
     }

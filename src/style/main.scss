@@ -2,9 +2,6 @@
 @import "partials/layout";
 @import "partials/sidebar";
 @import "partials/items";
-@import "partials/folders";
-
-/* Legacy / shared styles kept below. TODO: further split into partials (_legacy, _content, _embeds) */
 
 /* Fila estilo tabla compacta */
 .rss-fr-row {
@@ -105,7 +102,6 @@
 
 .rss-fr-row.read .rss-dot {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--background-modifier-border);
 }
 
 /* FIN ESTILOS RESPONSIVOS */
