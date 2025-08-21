@@ -96,13 +96,15 @@ export class LocalFeedItem implements Item {
         }
         
         return "";
-    }    pubDate(): string {
+    }
+    
+    pubDate(): string {
         return this.item.pubDate;
     }
 
     read(): boolean {
-    // Return actual persisted read state
-    return !!this.item.read;
+        // Return actual persisted read state
+        return this.item.read;
     }
 
     rtl(): boolean {
@@ -110,20 +112,15 @@ export class LocalFeedItem implements Item {
     }
 
     setTags(tags: string[]): void {
-        this.item.tags = tags || [];
+        this.item.tags = tags;
     }
 
     starred(): boolean {
-        return this.item.favorite || false;
-    }
-
-    // Add favorite property getter for direct access
-    get favorite(): boolean {
-        return this.item.favorite || false;
+        return this.item.favorite;
     }
 
     tags(): string[] {
-    return this.item.tags || [];
+        return this.item.tags;
     }
 
     title(): string {
@@ -133,5 +130,4 @@ export class LocalFeedItem implements Item {
     url(): string {
         return this.item.link;
     }
-
 }

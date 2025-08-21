@@ -25,25 +25,21 @@ export class ItemStateService {
 
     constructor(private plugin: RssReaderPlugin) {}
 
-    async toggleRead(wrapperOrRaw: any): Promise<boolean> {
-        const raw = (wrapperOrRaw && wrapperOrRaw.item) ? wrapperOrRaw.item : wrapperOrRaw;
-        const newState = !raw.read;
-        raw.read = newState;
-
-        // Update wrapper if it exists
-        if (wrapperOrRaw?.markRead) wrapperOrRaw.markRead(newState);
+    async toggleRead(item: Item): Promise<boolean> {
+        const newState = !item.read();
 
         // Use the unified write method with proper mutator
         await this.plugin.writeFeedContentDebounced((items) => {
-            this.syncRawInItems(items, raw, {read: newState});
+            this.syncRawInItems(items, item, {read: newState});
         }, 250);
 
         // Dispatch events
         try { 
-            document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); 
+            document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
             document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {
-            detail: { link: raw.link, read: newState }
-            })); 
+                detail: { link: item.url(), read: newState }
+            }) );
+            
         } catch (e) {
             console.warn('Failed to dispatch read events:', e);
         }
@@ -52,12 +48,10 @@ export class ItemStateService {
     }
 
     async toggleFavorite(item: Item): Promise<boolean> {
-        console.log('[toggleFavorite] called with:', item);
         const newFav = !item.starred();
-        console.log('[toggleFavorite] newFav:', newFav);
 
         await this.plugin.writeFeedContentDebounced((items) => {
-            this.syncRawInItems(items, item, {starred: newFav});
+            this.syncRawInItems(items, item, { favorite: newFav });
         }, 250);
 
         new Notice(newFav ? t('added_to_favorites') : t('removed_from_favorites'));
@@ -66,6 +60,7 @@ export class ItemStateService {
             document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED, {
                 detail: { link: item.url(), favorite: newFav }
             }) );
+            
         } catch (e) {
             console.warn('Failed to dispatch favorite events:', e);
         }

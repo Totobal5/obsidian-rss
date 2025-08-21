@@ -5,13 +5,13 @@ import {
     Menu,
     Modal,
 } from "obsidian";
+
 import RssReaderPlugin from "../main";
 import Action from "../actions/Action";
 import t from "../l10n/locale";
 import {copy, rssToMd} from "../functions";
 import type {Item} from "../providers/Item";
 import {pluginApi} from "@vanakat/plugin-api";
-import {RSS_EVENTS} from '../events';
 
 declare global {
     interface Window {
@@ -25,10 +25,15 @@ declare global {
 
 export class ItemModal extends Modal {
     private readonly plugin: RssReaderPlugin;
-    private readonly item: any; // allow plain object or provider Item
-    private readonly items: any[]; // list of raw items for navigation
+    // allow plain object or provider Item
+    private readonly item: Item;
+    // list of raw items for navigation
+    private readonly items: Item[];
+
     private readonly save: boolean;
+
     private readButton: ButtonComponent;
+
     private favoriteButton: ButtonComponent;
 
     constructor(plugin: RssReaderPlugin, item: Item, items: Item[], save = true) {
@@ -37,632 +42,622 @@ export class ItemModal extends Modal {
         this.items = items ?? [];
         this.item = item;
         this.save = save;
-    // Ya no marcamos como leído aquí (opción 2): se hará en onOpen para centralizar eventos/servicios.
 
         if (!this.plugin.settings) return;
 
-        if (this.plugin.settings.hotkeys.read) {
-            this.scope.register([], this.plugin.settings.hotkeys.read, () => this.markAsRead());
+        const { hotkeys } = this.plugin.settings;
+
+        const hotkeyActions: Array<[string, () => void]> = [
+            [hotkeys.read, () => this.markAsRead()],
+            [hotkeys.favorite, () => this.markAsFavorite()],
+            [hotkeys.create, () => Action.CREATE_NOTE.processor(this.plugin, this.item)],
+            [hotkeys.paste, () => Action.PASTE.processor(this.plugin, this.item)],
+            [hotkeys.copy, () => Action.COPY.processor(this.plugin, this.item)],
+            [hotkeys.open, () => Action.OPEN.processor(this.plugin, this.item)],
+            [hotkeys.next, () => this.next()],
+            [hotkeys.previous, () => this.previous()],
+        ];
+
+        for (const [key, handler] of hotkeyActions) {
+            if (key) this.scope.register([], key, handler);
         }
-        if (this.plugin.settings.hotkeys.favorite) {
-            this.scope.register([], this.plugin.settings.hotkeys.favorite, () => this.markAsFavorite());
-        }
-        if (this.plugin.settings.hotkeys.create) {
-            this.scope.register([], this.plugin.settings.hotkeys.create, () => Action.CREATE_NOTE.processor(this.plugin, this.item));
-        }
-        if (this.plugin.settings.hotkeys.paste) {
-            this.scope.register([], this.plugin.settings.hotkeys.paste, () => Action.PASTE.processor(this.plugin, this.item));
-        }
-        if (this.plugin.settings.hotkeys.copy) {
-            this.scope.register([], this.plugin.settings.hotkeys.copy, () => Action.COPY.processor(this.plugin, this.item));
-        }
-        if (this.plugin.settings.hotkeys.open) {
-            this.scope.register([], this.plugin.settings.hotkeys.open, () => Action.OPEN.processor(this.plugin, this.item));
-        }
-        if (this.plugin.settings.hotkeys.next) {
-            this.scope.register([], this.plugin.settings.hotkeys.next, () => this.next());
-        }
-        if (this.plugin.settings.hotkeys.previous) {
-            this.scope.register([], this.plugin.settings.hotkeys.previous, () => this.previous());
-        }
-        if (window['PluginApi']) {
+
+        if (window['PluginApi'] && hotkeys.tts) {
             const tts = pluginApi("tts");
-            if (tts && this.plugin.settings.hotkeys.tts) {
-                this.scope.register([], this.plugin.settings.hotkeys.tts, () => {
+            if (tts) {
+                this.scope.register([], hotkeys.tts, () => {
                     if (tts.isSpeaking()) {
-                        if (tts.isPaused()) tts.resume(); else tts.pause();
+                        tts.isPaused() ? tts.resume() : tts.pause();
                         return;
                     }
-                    const content = htmlToMarkdown(typeof (this.item as any).body === 'function' ? (this.item as any).body() : (this.item as any).body || '');
-                    const titleVal = typeof (this.item as any).title === 'function' ? (this.item as any).title() : (this.item as any).title;
-                    tts.say(titleVal, content);
+                    tts.say(this.item.title(), this.item.body());
                 });
             }
         }
     }
 
-    private valueOrFn(v:any){
-        try {
-            if (typeof v === 'function') {
-                try { return v.call(this.item); } catch { return v(); }
-            }
-            return v;
-        } catch { return v; }
-    }
-
-    previous(): void { // move to earlier index
+    // move to earlier index
+    public previous(): void {
         if (!this.items || this.items.length === 0) return;
-    let index = this.items.findIndex((itm) => itm === this.item);
+        let index = this.items.findIndex((itm) => itm === this.item);
         index--;
+
         if (index >= 0 && index < this.items.length) {
             const target = this.items[index];
             if (target) {
-                this.markItemReadAndPersist(target).then(() => {
-                    this.close();
-                    new ItemModal(this.plugin, target, this.items, this.save).open();
-                });
+                // Mark target as read (optimistic) before navigating
+                this.plugin.itemStateService.toggleRead(target).catch(() => {});
+                this.close();
+                new ItemModal(this.plugin, target, this.items, this.save).open();
             }
         }
     }
 
-    next(): void { // move to later index
+    // move to later index
+    public next(): void {
         if (!this.items || this.items.length === 0) return;
-    let index = this.items.findIndex((itm) => itm === this.item);
+        let index = this.items.findIndex((itm) => itm === this.item);
         index++;
+        
         if (index >= 0 && index < this.items.length) {
             const target = this.items[index];
             if (target) {
-                this.markItemReadAndPersist(target).then(() => {
-                    this.close();
-                    new ItemModal(this.plugin, target, this.items, this.save).open();
-                });
+                this.plugin.itemStateService.toggleRead(target).catch(() => {});
+                this.close();
+                new ItemModal(this.plugin, target, this.items, this.save).open();
             }
         }
-    }
-
-    /** Marca un item como leído si no lo está y persiste + evento para refrescar contadores */
-    private async markItemReadAndPersist(target: Item): Promise<void> {
-        try {
-            const raw = (target as any).item || target;
-            if (!raw.read) {
-                raw.read = true;
-                if (target.markRead) target.markRead(true);
-                // Sincronizar dentro de settings por link
-                outer: for (const feedContent of this.plugin.settings.items) {
-                    if (!feedContent || !Array.isArray(feedContent.items)) continue;
-                    for (const i of feedContent.items) {
-                        if (i.link === raw.link) { i.read = true; break outer; }
-                    }
-                }
-                await this.plugin.writeFeedContent(arr => arr);
-                try {
-                    const localProvider: any = await this.plugin.providers.getById('local');
-                    localProvider?.invalidateCache && localProvider.invalidateCache();
-                } catch {}
-                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED, {detail:{link: raw.link, read: true}})); } catch {}
-            }
-        } catch (e) { console.warn('Failed to auto-mark read on navigation', e); }
     }
 
     private getFavoriteState(): boolean {
-    return !!(this.item.favorite ?? this.valueOrFn(this.item.favorite));
+        return !!(this.item.starred() );
     }
 
-    async markAsFavorite(): Promise<void> {
-        // Access the raw item data directly
-    await Action.FAVORITE.processor(this.plugin, this.item);
-    const fav = this.getFavoriteState();
-    this.favoriteButton.setIcon('star');
-    this.favoriteButton.setTooltip(fav ? t("remove_from_favorites") : t("mark_as_favorite"));
-    this.favoriteButton.buttonEl.toggleClass('is-favorite', fav);
-    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED)); } catch {}
-    }
+    private async markAsFavorite(): Promise<void> {
+        const prev = this.getFavoriteState();
+        // Optimista
+        this.favoriteButton.buttonEl.toggleClass('is-favorite', !prev);
 
-    private async refreshMainView(): Promise<void> {
-        // Encontrar y refrescar solo el contador de la vista principal de RSS
-        const views = this.plugin.app.workspace.getLeavesOfType('RSS_FEED');
-        for (const view of views) {
-            if (view.view && 'updateFavoritesCounter' in view.view) {
-                console.log(`🔍 Updating main RSS view favorites counter after favorite change`);
-                await (view.view as any).updateFavoritesCounter();
-            }
+        try {
+            const newFav = await this.plugin.itemStateService.toggleFavorite(this.item);
+            this.favoriteButton.setTooltip(newFav ? t("remove_from_favorites") : t("mark_as_favorite"));
+        } catch (e) {
+            // revertir si falla
+            this.favoriteButton.buttonEl.toggleClass('is-favorite', prev);
+            console.warn('Favorite toggle failed', e);
         }
     }
 
-    async markAsRead(): Promise<void> {
-    await Action.READ.processor(this.plugin, this.item);
-    const isRead = !!this.item.read;
-    this.readButton.setIcon(isRead ? 'eye-off' : 'eye');
-    this.readButton.setTooltip(isRead ? t("mark_as_unread") : t("mark_as_read"));
-    this.readButton.buttonEl.toggleClass('is-read', isRead);
-    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED)); } catch {}
-    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
+    private async markAsRead(): Promise<void> {
+        // idempotente
+        if (this.item.read()) return;
+
+        // UI optimista
+        this.readButton.buttonEl.toggleClass('is-read', true);
+        this.readButton.setIcon('eye-off');
+        this.readButton.setTooltip(t("mark_as_unread"));
+
+        try {
+            await this.plugin.itemStateService.toggleRead(this.item);
+            // (El servicio ya despacha eventos; elimina los dispatch manuales si es así)
+        } catch (e) {
+            // revertir si falla
+            this.readButton.buttonEl.toggleClass('is-read', false);
+            this.readButton.setIcon('eye');
+            this.readButton.setTooltip(t("mark_as_read"));
+            console.warn('Mark read failed', e);
+        }
     }
 
     async display(): Promise<void> {
-        // Debug: Estado inicial del item al abrir modal
-    // Clean display – remove noisy debug logs
-        
         this.modalEl.addClass("rss-modal");
-        const {contentEl} = this;
-        contentEl.empty();
+        const { contentEl } = this;
+        this.prepareContainer(contentEl);
 
-        // Permitir scroll en el modal
+        await this.buildTopButtons(contentEl);
+        this.renderHeader(contentEl);
+
+        const bodyHtml = this.getBodyHtml();
+        const mediaContainer = contentEl.createDiv('rss-content');
+        mediaContainer.addClass("rss-scrollable-content", "rss-selectable");
+        this.renderMedia(mediaContainer);
+
+        if (bodyHtml) {
+            await this.renderBodyWithMarkdown(bodyHtml, mediaContainer);
+            await this.embedYouTubeLinks(mediaContainer);
+            await this.embedSocialLinks(mediaContainer);
+
+            const excerptEl = contentEl.querySelector('.rss-excerpt');
+            if (excerptEl) await this.embedSocialLinks(excerptEl as HTMLElement);
+
+            this.applyHighlights(mediaContainer, contentEl);
+            this.attachBodyInteractions(mediaContainer, contentEl);
+        }
+    }
+
+    private prepareContainer(contentEl: HTMLElement): void {
+        contentEl.empty();
         contentEl.style.height = "100%";
         contentEl.style.overflowY = "auto";
         contentEl.style.maxHeight = "80vh";
+    }
 
-        const topButtons = contentEl.createDiv('topButtons');
-        topButtons.style.position = "sticky";
-        topButtons.style.top = "0";
-        topButtons.style.backgroundColor = "var(--background-primary)";
-        topButtons.style.zIndex = "10";
-        topButtons.style.padding = "8px 0";
-        topButtons.style.marginBottom = "12px";
-
-        let actions = Array.of(Action.CREATE_NOTE, Action.PASTE, Action.COPY, Action.OPEN);
-
-        if (this.save) {
-            const rawItem = (this.item as any).item || this.item;
-            const initialRead = !!rawItem.read;
-            this.readButton = new ButtonComponent(topButtons)
-                .setIcon(initialRead ? 'eye-off' : 'eye')
-                .setTooltip(initialRead ? t("mark_as_unread") : t("mark_as_read"))
-                .onClick(async () => {
-                    await this.markAsRead();
-                });
-            this.readButton.buttonEl.setAttribute("tabindex", "-1");
-            this.readButton.buttonEl.addClass("rss-button");
-            this.readButton.buttonEl.toggleClass('is-read', initialRead);
-
-            const initialFav = this.getFavoriteState();
-            this.favoriteButton = new ButtonComponent(topButtons)
-                .setIcon('star')
-                .setTooltip(initialFav ? t("remove_from_favorites") : t("mark_as_favorite"))
-                .onClick(async () => {
-                    await this.markAsFavorite();
-                });
-            this.favoriteButton.buttonEl.setAttribute("tabindex", "-1");
-            this.favoriteButton.buttonEl.addClass("rss-button");
-            this.favoriteButton.buttonEl.toggleClass('is-favorite', initialFav);
-
-            actions = Array.of(Action.TAGS, ...actions);
-        }
-
-
-        actions.forEach((action) => {
-            const button = new ButtonComponent(topButtons)
-                .setIcon(action.icon)
-                .setTooltip(action.name)
-                .onClick(async () => {
-                    await action.processor(this.plugin, this.item);
-                });
-            button.buttonEl.setAttribute("tabindex", "-1");
-            button.buttonEl.addClass("rss-button");
+    private async buildTopButtons(contentEl: HTMLElement): Promise<void> {
+        const top = contentEl.createDiv('topButtons');
+        Object.assign(top.style, {
+            position: 'sticky', 
+            top: '0', 
+            backgroundColor: 'var(--background-primary)', 
+            zIndex: '10',
+            padding: '8px 0', 
+            marginBottom: '12px'
         });
 
-        // autoMarkOnOpen: mark unread items as read immediately when modal opens
+        // Base action set
+        let actions = [Action.CREATE_NOTE, Action.PASTE, Action.COPY, Action.OPEN];
+
+        if (this.save) {
+            // Read button
+            const initialRead = !!this.item.read();
+            this.readButton = new ButtonComponent(top)
+                .setIcon(initialRead ? 'eye-off' : 'eye')
+                .setTooltip(initialRead ? t("mark_as_unread") : t("mark_as_read"))
+                .onClick(async () => { await this.markAsRead(); });
+            this.readButton.buttonEl.addClass("rss-button");
+            this.readButton.buttonEl.setAttribute('tabindex','-1');
+            this.readButton.buttonEl.toggleClass('is-read', initialRead);
+
+            // Favorite button
+            const initialFav = this.getFavoriteState();
+            this.favoriteButton = new ButtonComponent(top)
+                .setIcon('star')
+                .setTooltip(initialFav ? t("remove_from_favorites") : t("mark_as_favorite"))
+                .onClick(async () => { await this.markAsFavorite(); });
+            this.favoriteButton.buttonEl.addClass("rss-button");
+            this.favoriteButton.buttonEl.setAttribute('tabindex','-1');
+            this.favoriteButton.buttonEl.toggleClass('is-favorite', initialFav);
+
+            actions = [Action.TAGS, ...actions];
+        }
+
+        // Core actions
+        actions.forEach(a => {
+            const btn = new ButtonComponent(top)
+                .setIcon(a.icon)
+                .setTooltip(a.name)
+                .onClick(async () => { await a.processor(this.plugin, this.item); });
+            btn.buttonEl.addClass('rss-button');
+            btn.buttonEl.setAttribute('tabindex','-1');
+        });
+
+        // TTS (plugin api)
         try {
-            const raw = (this.item as any).item || this.item;
-            if (this.plugin.settings.autoMarkOnOpen && !raw.read) {
+            if (window['PluginApi']) {
+                const tts = pluginApi('tts');
+                if (tts) {
+                    const ttsBtn = new ButtonComponent(top)
+                        .setIcon('headphones')
+                        .setTooltip(t('read_article_tts'))
+                        .onClick(async () => {
+                            const content = htmlToMarkdown(this.item.body());
+                            await tts.say(this.item.title(), content, this.item.language());
+                        });
+                    ttsBtn.buttonEl.addClass('rss-button');
+                }
+            }
+        } catch {}
+
+        // Prev / Next
+        new ButtonComponent(top)
+            .setIcon('left-arrow-with-tail')
+            .setTooltip(t('previous'))
+            .onClick(() => this.previous())
+            .buttonEl.addClass('rss-button');
+        new ButtonComponent(top)
+            .setIcon('right-arrow-with-tail')
+            .setTooltip(t('next'))
+            .onClick(() => this.next())
+            .buttonEl.addClass('rss-button');
+
+        // Auto mark on open (after buttons so state matches UI)
+        try {
+            if (this.plugin.settings.autoMarkOnOpen && !this.item.read() ) {
                 await this.markAsRead();
             }
         } catch {}
-        if(window['PluginApi']) {
-            const tts = pluginApi("tts");
-            if (tts) {
-                const ttsButton = new ButtonComponent(topButtons)
-                    .setIcon("headphones")
-                    .setTooltip(t("read_article_tts"))
-                    .onClick(async () => {
-                        const content = htmlToMarkdown(this.item.body());
-                        await tts.say(this.item.title, content, this.item.language());
-                    });
-                ttsButton.buttonEl.addClass("rss-button");
-            }
+    }
+
+    private renderHeader(contentEl: HTMLElement): void {
+        contentEl.createEl('h1', { cls: ['rss-title','rss-selectable'], text: this.item.title() });
+        this.renderExcerpt(contentEl);
+        
+        // Subtitle (author + date)
+        const subtitle = contentEl.createEl('h3','rss-subtitle');
+        subtitle.addClass('rss-selectable');
+        const authVal = this.item.author() ? this.item.author() : '';
+        if (authVal) subtitle.appendText(authVal);
+        // Obtain publication date
+        if (this.item.pubDate() ) {
+            const pd = this.item.pubDate();
+            if (pd) subtitle.appendText(' - ' + window.moment(pd).format(this.plugin.settings.dateFormat));
         }
 
-        const prevButton = new ButtonComponent(topButtons)
-            .setIcon("left-arrow-with-tail")
-            .setTooltip(t("previous"))
-            .onClick(() => {
-                this.previous();
+        // Tags
+        const tags = this.item.tags() ? this.item.tags() : [];
+        if (Array.isArray(tags) && tags.length) {
+            const tagEl = contentEl.createSpan('tags');
+            tags.forEach((tag: string) => {
+                const tagA = tagEl.createEl('a');
+                tagA.setText(tag);
+                tagA.addClass('tag','rss-tag');
             });
-        prevButton.buttonEl.addClass("rss-button");
+        }
+    }
 
-        const nextButton = new ButtonComponent(topButtons)
-            .setIcon("right-arrow-with-tail")
-            .setTooltip(t("next"))
-            .onClick(() => {
-                this.next();
-            });
-        nextButton.buttonEl.addClass("rss-button");
-
-    contentEl.createEl('h1', {cls: ["rss-title", "rss-selectable"], text: this.valueOrFn(this.item.title)});
-        // description under title (even if also appears later)
+    /**
+     * Renders a cleaned and truncated excerpt from the item's description,
+     * avoiding duplication with the body content.
+     */
+    private renderExcerpt(contentEl: HTMLElement): void {
         try {
-            // Fallback chain: body() / body prop -> content / content() -> description
-            const bodyRawFallback = this.item.body ? this.valueOrFn(this.item.body)
-                : (this.item.content ? this.valueOrFn(this.item.content)
-                    : (this.item.description ? this.valueOrFn(this.item.description) : ''));
-            const rawDesc = this.item.description ? this.valueOrFn(this.item.description) : '';
+            // Get raw description and return early if missing
+            const rawDesc = this.item.description?.() ?? '';
+            if (!rawDesc) return;
+
+            // Remove scripts, styles, HTML tags, and extra whitespace
             const textDesc = rawDesc
-                .replace(/<script[\s\S]*?<\/script>/gi,'')
-                .replace(/<style[\s\S]*?<\/style>/gi,'')
-                .replace(/<[^>]+>/g,' ')
-                .replace(/\s+/g,' ')
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
                 .trim();
-            const bodyHtml = bodyRawFallback;
-            const bodyStripped = (bodyHtml||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-            // Mostrar excerpt solo si difiere del cuerpo (para evitar duplicación)
-            if (textDesc && bodyStripped && bodyStripped.slice(0,300) !== textDesc.slice(0,300)) {
-                const excerpt = this.truncateWords(textDesc, 300);
-                const p = contentEl.createEl('p', {cls: ['rss-excerpt','rss-selectable']});
-                p.innerHTML = this.linkify(excerpt);
-            }
-        } catch(error) {
-            console.warn('Failed to process item content for display:', error);
+            if (!textDesc) return;
+
+            // Get body HTML and strip tags for comparison
+            const bodyHtml = this.getBodyHtml();
+            const bodyStripped = (bodyHtml ?? '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            // Avoid rendering excerpt if it's a duplicate of the body
+            if (bodyStripped.slice(0, 300) === textDesc.slice(0, 300)) return;
+
+            // Truncate and linkify excerpt, then render
+            const excerpt = this.truncateWords(textDesc, 300);
+            const p = contentEl.createEl('p', { cls: ['rss-excerpt', 'rss-selectable'] });
+            p.innerHTML = this.linkify(excerpt);
+        } catch (e) {
+            console.warn('Excerpt render failed', e);
+        }
+    }
+
+    private getBodyHtml(): string {
+        const bodyText = this.item.body();
+        if (bodyText && bodyText.trim().length > 0) {
+            return bodyText;
         }
 
-        const subtitle = contentEl.createEl("h3", "rss-subtitle");
-        subtitle.addClass("rss-selectable");
-    const authVal = this.item.author ? this.valueOrFn(this.item.author) : '';
-    if (authVal) subtitle.appendText(authVal);
-        if (this.item.pubDate) {
-            const pd = this.valueOrFn(this.item.pubDate);
-            if (pd) subtitle.appendText(" - " + window.moment(pd).format(this.plugin.settings.dateFormat));
+        const descText = this.item.description();
+        if (descText && descText.trim().length > 0) {
+            return descText;
         }
-        const tagEl = contentEl.createSpan("tags");
-        const tagsArr = this.item.tags ? this.valueOrFn(this.item.tags) : [];
-        tagsArr.forEach((tag: string) => {
-            const tagA = tagEl.createEl("a");
-            tagA.setText(tag);
-            tagA.addClass("tag", "rss-tag");
-        });
 
-        const content = contentEl.createDiv('rss-content');
-        content.addClass("rss-scrollable-content", "rss-selectable");
+        return '';
+    }
 
-    const encLink = this.item.enclosureLink ? this.valueOrFn(this.item.enclosureLink) : null;
-    const encMime = this.item.enclosureMime ? (this.valueOrFn(this.item.enclosureMime) || '').toString() : '';
-        if (encLink && this.plugin.settings.displayMedia) {
-            const mimeLower = encMime.toLowerCase();
-            if (mimeLower.includes("audio")) {
-                const audio = content.createEl("audio", {attr: {controls: "controls"}});
-                audio.createEl("source", {attr: {src: encLink, type: encMime}});
-            }
-            if (mimeLower.includes("video")) {
-                const video = content.createEl("video", {attr: {controls: "controls", width: "100%", height: "100%"}});
-                video.createEl("source", {attr: {src: encLink, type: encMime}});
-            }
+    /**
+     * Renders media content (audio, video, YouTube) in the provided container.
+     */
+    private renderMedia(container: HTMLElement): void {
+        const enclosureLink = this.item.enclosureLink();
+        const enclosureMime = (this.item.enclosureMime() || '').toString().toLowerCase();
 
-            //embedded yt player
-            const idVal2 = this.item.id ? this.valueOrFn(this.item.id) : '';
-            if (encLink && typeof idVal2 === "string" && idVal2.startsWith("yt:")) {
-                content.createEl("iframe", {
-                    attr: {
-                        type: "text/html",
-                        src: "https://www.youtube.com/embed/" + encLink,
-                        width: "100%",
-                        height: "100%",
-                        allowFullscreen: "true"
+        // Exit early if no enclosure link or media display is disabled
+        if (!enclosureLink || !this.plugin.settings.displayMedia) return;
+
+        // Render audio player if MIME type indicates audio
+        if (enclosureMime.includes('audio')) {
+            const audioElement = container.createEl('audio', { attr: { controls: 'controls' } });
+            audioElement.createEl('source', { attr: { src: enclosureLink, type: enclosureMime } });
+        }
+
+        // Render video player if MIME type indicates video
+        if (enclosureMime.includes('video')) {
+            const videoElement = container.createEl('video', { attr: { controls: 'controls', width: '100%', height: '100%' } });
+            videoElement.createEl('source', { attr: { src: enclosureLink, type: enclosureMime } });
+        }
+
+        // Special case: YouTube enclosure (id starts with 'yt:')
+        const itemId = this.item.id().toString();
+        if (enclosureLink && itemId.startsWith('yt:')) {
+            container.createEl('iframe', {
+                attr: {
+                    type: 'text/html',
+                    src: `https://www.youtube.com/embed/${enclosureLink}`,
+                    width: '100%',
+                    height: '100%',
+                    allowFullscreen: 'true'
+                }
+            });
+        }
+    }
+
+    private async renderBodyWithMarkdown(bodyHtml: string, target: HTMLElement): Promise<void> {
+        const markdown = rssToMd(this.plugin, bodyHtml);
+        await MarkdownRenderer.renderMarkdown(markdown, target, '', this.plugin);
+    }
+
+    private applyHighlights(content: HTMLElement, root: HTMLElement): void {
+        const highlightsArr = this.item.highlights() || [];
+        if (!Array.isArray(highlightsArr) || highlightsArr.length === 0) return;
+
+        const walk = (node: Node | HTMLElement) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                highlightsArr.forEach((hl: string) => {
+                    if (!hl) return;
+                    let idx = node.textContent?.indexOf(hl);
+                    if (idx !== undefined && idx > -1) {
+                        const before = node.textContent!.slice(0, idx);
+                        const after = node.textContent!.slice(idx + hl.length);
+
+                        const frag = document.createDocumentFragment();
+                        if (before) frag.appendChild(document.createTextNode(before));
+                        const mark = document.createElement('mark');
+                        mark.textContent = hl;
+                        frag.appendChild(mark as Node);
+                        if (after) frag.appendChild(document.createTextNode(after));
+
+                        node.parentNode?.replaceChild(frag, node as Node);
                     }
                 });
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                Array.from((node as Element).childNodes).forEach(walk);
             }
-        }
+        };
 
-    const bodyVal = this.item.body ? this.valueOrFn(this.item.body)
-            : (this.item.content ? this.valueOrFn(this.item.content)
-                : (this.item.description ? this.valueOrFn(this.item.description) : ''));
-        if (bodyVal) {
-            //prepend empty yaml to fix rendering errors
-            const markdown = "---\n---" + rssToMd(this.plugin, bodyVal);
+        walk(content);
+    }
 
-            await MarkdownRenderer.renderMarkdown(markdown, content, "", this.plugin);
+    private attachBodyInteractions(content: HTMLElement, root: HTMLElement): void {
+        // Link click open externally
+        content.addEventListener('click', (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            const link = target.closest('a');
+            if (link && (link as HTMLAnchorElement).href) {
+                event.preventDefault();
+                window.open((link as HTMLAnchorElement).href, '_blank', 'noopener,noreferrer');
+            }
+        });
 
-            // Mejorar embeds de YouTube en el contenido
-            await this.embedYouTubeLinks(content);
-            
-            // Crear embeds sociales después del renderizado
-            await this.embedSocialLinks(content);
-            
-            // También procesar links que puedan estar en el excerpt
-            const excerptEl = contentEl.querySelector('.rss-excerpt');
-            if (excerptEl) {
-                await this.embedSocialLinks(excerptEl as HTMLElement);
+        content.addEventListener('contextmenu', (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (target.closest('a')) return; // keep default link menu
+            event.preventDefault();
+
+            const selection = document.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+
+            const div = root.createDiv();
+            const htmlContent = range.cloneContents();
+            div.appendChild(htmlContent.cloneNode(true));
+            const selected = div.innerHTML;
+            div.remove();
+
+            const menu = new Menu();
+            let previousHighlight: HTMLElement;
+            try {
+                if (this.item.highlights().includes(range.startContainer.parentElement.innerHTML)) previousHighlight = range.startContainer.parentElement as HTMLElement;
+                if (!previousHighlight && this.item.highlights().includes(range.startContainer.parentElement?.parentElement?.innerHTML)) previousHighlight = range.startContainer.parentElement.parentElement as HTMLElement;
+            } catch {}
+
+            if (previousHighlight) {
+                menu.addItem(mi => mi.setIcon('highlight-glyph').setTitle(t('highlight_remove')).onClick(async () => {
+                    const repl = root.createSpan();
+                    repl.innerHTML = previousHighlight.innerHTML;
+                    previousHighlight.replaceWith(repl);
+                    this.item.highlights().remove(previousHighlight.innerHTML);
+                    const feedContents = this.plugin.settings.items;
+                    await this.plugin.writeFeedContent(() => feedContents);
+                }));
+            } else if (selected.length > 0 && !this.item.highlights().includes(selected)) {
+                menu.addItem(mi => mi.setIcon('highlight-glyph').setTitle(t('highlight')).onClick(async () => {
+                    const newNode = root.createEl('mark');
+                    newNode.innerHTML = selected;
+                    range.deleteContents();
+                    range.insertNode(newNode);
+                    this.item.highlights().push(selected);
+                    const feedContents = this.plugin.settings.items;
+                    await this.plugin.writeFeedContent(() => feedContents);
+                    this.removeDanglingElements(root);
+                    this.removeDanglingElements(root);
+                }));
             }
 
-            const highlightsArr = this.item.highlights ? this.valueOrFn(this.item.highlights) : [];
-            highlightsArr.forEach((highlight: string) => {
-                if (content.innerHTML.includes(highlight)) {
-                    const newNode = contentEl.createEl("mark");
-                    newNode.innerHTML = highlight;
-                    content.innerHTML = content.innerHTML.replace(highlight, newNode.outerHTML);
-                    newNode.remove();
-                } else {
-                    console.log("Highlight not included");
-                    console.log(highlight);
+            if (selected.length > 0) {
+                menu.addItem(mi => mi.setIcon('documents').setTitle(t('copy_to_clipboard')).onClick(async () => { await copy(selection.toString()); }));
+                const pluginsManager = (window as any).app?.plugins;
+                if (pluginsManager && pluginsManager.plugins['obsidian-tts']) {
+                    menu.addItem(mi => mi.setIcon('headphones').setTitle(t('read_article_tts')).onClick(() => {
+                        const ttsService = pluginsManager.plugins['obsidian-tts'].ttsService;
+                        ttsService.say('', selection.toString());
+                    }));
                 }
-            });
+            }
 
-            // Permitir que los links funcionen correctamente
-            content.addEventListener('click', (event: MouseEvent) => {
-                const target = event.target as HTMLElement;
-                const link = target.closest('a');
-                if (link && link.href) {
-                    event.preventDefault();
-                    window.open(link.href, '_blank', 'noopener,noreferrer');
-                }
-            });
-
-            content.addEventListener('contextmenu', (event: MouseEvent) => {
-                // Solo preventDefault si no es un link
-                const target = event.target as HTMLElement;
-                if (!target.closest('a')) {
-                    event.preventDefault();
-                } else {
-                    return; // Permitir comportamiento normal de links
-                }
-
-                const selection = document.getSelection();
-                const range = selection.getRangeAt(0);
-
-                const div = contentEl.createDiv();
-                const htmlContent = range.cloneContents();
-                const html = htmlContent.cloneNode(true);
-                div.appendChild(html);
-                const selected = div.innerHTML;
-                div.remove();
-
-                const menu = new Menu();
-
-                let previousHighlight: HTMLElement;
-                if (this.item.highlights().includes(range.startContainer.parentElement.innerHTML)) {
-                    previousHighlight = range.startContainer.parentElement;
-                }
-                if (this.item.highlights().includes(range.startContainer.parentElement.parentElement.innerHTML)) {
-                    previousHighlight = range.startContainer.parentElement.parentElement;
-                }
-
-                if(previousHighlight) {
-                    menu.addItem(item => {
-                        item
-                            .setIcon("highlight-glyph")
-                            .setTitle(t("highlight_remove"))
-                            .onClick(async () => {
-                                const replacement = contentEl.createSpan();
-                                replacement.innerHTML = previousHighlight.innerHTML;
-                                previousHighlight.replaceWith(replacement);
-                                this.item.highlights().remove(previousHighlight.innerHTML);
-
-                                const feedContents = this.plugin.settings.items;
-                                await this.plugin.writeFeedContent(() => {
-                                    return feedContents;
-                                });
-                            });
-                    });
-                }else if(!this.item.highlights().includes(selected) && selected.length > 0) {
-                    menu.addItem(item => {
-                        item
-                            .setIcon("highlight-glyph")
-                            .setTitle(t("highlight"))
-                            .onClick(async () => {
-                                const newNode = contentEl.createEl("mark");
-                                newNode.innerHTML = selected;
-                                range.deleteContents();
-                                range.insertNode(newNode);
-                                this.item.highlights().push(selected);
-
-                                const feedContents = this.plugin.settings.items;
-                                await this.plugin.writeFeedContent(() => {
-                                    return feedContents;
-                                });
-
-                                //cleaning up twice to remove nested elements
-                                this.removeDanglingElements(contentEl);
-                                this.removeDanglingElements(contentEl);
-                            });
-                    });
-                }
-
-                if(selected.length > 0) {
-                    menu
-                        .addItem(item => {
-                            item
-                                .setIcon("documents")
-                                .setTitle(t("copy_to_clipboard"))
-                                .onClick(async () => {
-                                    await copy(selection.toString());
-                                });
-                        });
-                    //@ts-ignore
-                    if (this.app.plugins.plugins["obsidian-tts"]) {
-                        menu.addItem(item => {
-                            item
-                                .setIcon("headphones")
-                                .setTitle(t("read_article_tts"))
-                                .onClick(() => {
-                                    //@ts-ignore
-                                    const tts = this.app.plugins.plugins["obsidian-tts"].ttsService;
-                                    tts.say("", selection.toString());
-                                });
-                        });
-                    }
-                }
-
-                menu.showAtMouseEvent(event);
-            });
-        }
+            menu.showAtMouseEvent(event);
+        });
     }
 
     async onClose(): Promise<void> {
-        const {contentEl} = this;
+        const { contentEl } = this;
         contentEl.empty();
 
         const feedContents = this.plugin.settings.items;
-        await this.plugin.writeFeedContent(() => {
-            return feedContents;
-        });
+        await this.plugin.writeFeedContent(() => feedContents);
     }
 
     async onOpen(): Promise<void> {
-        // Opción 2: marcar leído al abrir (antes de render) sólo si 'save' y aún no leído.
-        try {
-            if (this.save && !this.item.read) {
-                if (this.plugin.itemStateService) {
-                    // Usar acción estándar (emitirá eventos internos) y actualizar UI.
-                    try { await Action.READ.processor(this.plugin, this.item); } catch {}
-                } else {
-                    // Fallback ligero sin dependencias.
-                    this.item.read = true;
-                    if (typeof this.item.markRead === 'function') this.item.markRead(true);
-                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.ITEM_READ_UPDATED)); } catch {}
-                    try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
-                }
-            }
-        } catch {}
         await this.display();
     }
 
+    /**
+     * Truncates the input text to a maximum number of characters,
+     * ensuring it does not cut off in the middle of a word.
+     * Adds an ellipsis at the end if truncated.
+     */
     private truncateWords(text: string, maxChars: number): string {
-        if (text.length <= maxChars) return text;
-        let slice = text.slice(0, maxChars - 1);
-        const lastSpace = slice.lastIndexOf(' ');
-        if (lastSpace > 40) slice = slice.slice(0, lastSpace);
-        return slice.trimEnd() + '…';
+        // If the text is already short enough, return as is
+        if (text.length <= maxChars) {
+            return text;
+        }
+
+        // Take a slice of the text up to maxChars minus one for the ellipsis
+        let truncated = text.slice(0, maxChars - 1);
+        const lastSpaceIndex = truncated.lastIndexOf(' ');
+        if (lastSpaceIndex > 40) {
+            truncated = truncated.slice(0, lastSpaceIndex);
+        }
+
+        return truncated.trimEnd() + '…';
     }
 
     private linkify(text: string): string {
-        // Simple URL to anchor conversion, preserve existing links and highlight twitter
-        return text.replace(/(?<!href=")(?<!src=")(https?:\/\/[\w.-]+(?:\/[\w\-._~:/?#@!$&'()*+,;=%]*)?)/gi, (url) => {
-            const safe = url.replace(/"/g,'&quot;');
-            const cls = url.includes('twitter.com') || url.includes('t.co') ? 'rss-link twitter' : 'rss-link';
-            return `<a href="${safe}" target="_blank" rel="noopener" class="${cls}">${url}</a>`;
+        // Regex to match URLs not already inside an anchor tag
+        const urlRegex = /((https?:\/\/)[\w.-]+(?:\/[\w\-._~:/?#@!$&'()*+,;=%]*)?)/gi;
+
+        return text.replace(urlRegex, (url: string) => {
+            // Avoid replacing URLs that are already part of an anchor tag
+            // (simple check: if previous 10 chars contain 'href=' or 'src=' skip)
+            const prev = text.substring(Math.max(0, text.indexOf(url) - 10), text.indexOf(url));
+            if (/href=|src=/.test(prev)) return url;
+
+            const safeUrl = url.replace(/"/g, '&quot;');
+            const isTwitter = /twitter\.com|t\.co/.test(url);
+            const cls = isTwitter ? 'rss-link twitter' : 'rss-link';
+
+            return `<a href="${safeUrl}" target="_blank" rel="noopener" class="${cls}">${url}</a>`;
         });
     }
 
     private async embedYouTubeLinks(contentEl: HTMLElement): Promise<void> {
-        // Patrones para detectar links de YouTube
-        const youtubePatterns = [
-            /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/g,
-            /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/g
-        ];
-
-        // Buscar todos los links de YouTube
-        const allLinks = contentEl.querySelectorAll('a[href*="youtube.com"], a[href*="youtu.be"]');
-        
-        for (const link of Array.from(allLinks)) {
-            const href = (link as HTMLAnchorElement).href;
-            let videoId = '';
-            
-            // Extraer video ID usando los patrones
-            for (const pattern of youtubePatterns) {
-                const match = href.match(pattern);
-                if (match && match[1]) {
-                    videoId = match[1];
-                    break;
-                }
+        // Helper to extract YouTube video ID from a URL
+        const extractVideoId = (url: string): string | null => {
+            const patterns = [
+                /(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/
+            ];
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match && match[1]) return match[1];
             }
-            
-            if (videoId) {
-                // Verificar que no existe ya un embed para este video
-                if (link.nextElementSibling?.classList.contains('youtube-embed')) {
-                    continue;
-                }
+            return null;
+        };
 
-                // Crear el iframe embed
-                const embedContainer = link.ownerDocument.createElement('div');
-                embedContainer.className = 'youtube-embed';
-                embedContainer.style.cssText = `
-                    margin: 20px auto;
-                    text-align: center;
-                    max-width: 100%;
-                `;
+        const youtubeLinks = Array.from(contentEl.querySelectorAll('a[href*="youtube.com"], a[href*="youtu.be"]')) as HTMLAnchorElement[];
 
-                const iframe = link.ownerDocument.createElement('iframe');
-                iframe.style.cssText = `
-                    width: 100%;
-                    max-width: 560px;
-                    height: 315px;
-                    border: none;
-                    border-radius: 8px;
-                `;
-                iframe.setAttribute('src', `https://www.youtube.com/embed/${videoId}?rel=0`);
-                iframe.setAttribute('allowfullscreen', 'true');
-                iframe.setAttribute('frameborder', '0');
+        for (const link of youtubeLinks) {
+            const href = link.href;
+            const videoId = extractVideoId(href);
 
-                (embedContainer as any).appendChild(iframe as any);
-                
-                // Insertar después del link
-                if (link.parentNode) {
-                    (link.parentNode as any).insertBefore(embedContainer, link.nextSibling as any);
-                }
+            if (!videoId) continue;
+
+            // Skip if already embedded
+            if (link.nextElementSibling?.classList.contains('youtube-embed')) continue;
+
+            // Create embed container
+            const embedContainer = link.ownerDocument.createElement('div');
+            embedContainer.className = 'youtube-embed';
+            embedContainer.style.margin = '20px auto';
+            embedContainer.style.textAlign = 'center';
+            embedContainer.style.maxWidth = '100%';
+
+            // Create iframe
+            const iframe = link.ownerDocument.createElement('iframe');
+            iframe.style.width = '100%';
+            iframe.style.maxWidth = '560px';
+            iframe.style.height = '315px';
+            iframe.style.border = 'none';
+            iframe.style.borderRadius = '8px';
+            iframe.src = `https://www.youtube.com/embed/${videoId}?rel=0`;
+            iframe.setAttribute('allowfullscreen', 'true');
+            iframe.setAttribute('frameborder', '0');
+
+            embedContainer.appendChild(iframe as unknown as Node);
+
+            // Insert after the link
+            if (link.parentNode) {
+                link.parentNode.insertBefore(embedContainer as unknown as Node, link.nextSibling);
             }
         }
     }
 
     private async embedSocialLinks(contentEl: HTMLElement): Promise<void> {
         const cfg = this.plugin.settings.socialEmbeds;
-        if (!cfg || !cfg.enable) return; // feature disabled
+        if (!cfg?.enable) return;
 
-        // Seleccionamos todos y filtramos por hostname para evitar falsos positivos (ej: 'reddit.com' contiene la subcadena 't.co')
         const allLinks = Array.from(contentEl.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+
+        const getHostname = (a: HTMLAnchorElement) => {
+            try { return new URL(a.href).hostname.toLowerCase(); } catch { return ''; }
+        };
+
         const twitterLinks = allLinks.filter(a => {
-            try { const h = new URL(a.href).hostname.toLowerCase(); return h.endsWith('twitter.com') || h === 'x.com' || h === 't.co'; } catch { return false; }
-        });
-        const redditLinks = allLinks.filter(a => {
-            try { const h = new URL(a.href).hostname.toLowerCase(); return h === 'www.reddit.com' || h === 'old.reddit.com' || h === 'reddit.com'; } catch { return false; }
-        });
-	const youtubeLinks = allLinks.filter(a => {
-            try { const h = new URL(a.href).hostname.toLowerCase(); return h.endsWith('youtube.com') || h === 'youtu.be'; } catch { return false; }
+            const h = getHostname(a);
+            return h.endsWith('twitter.com') || h === 'x.com' || h === 't.co';
         });
 
-        const processLink = (el: HTMLAnchorElement, platform: 'twitter'|'reddit') => {
-            if (el.dataset['rssProcessed']) return;
-            el.dataset['rssProcessed'] = '1';
+        const redditLinks = allLinks.filter(a => {
+            const h = getHostname(a);
+            return h === 'www.reddit.com' || h === 'old.reddit.com' || h === 'reddit.com';
+        });
+
+        const youtubeLinks = allLinks.filter(a => {
+            const h = getHostname(a);
+            return h.endsWith('youtube.com') || h === 'youtu.be';
+        });
+
+        const processLink = (el: HTMLAnchorElement, platform: 'twitter' | 'reddit') => {
+            if (el.dataset.rssProcessed) return;
+            el.dataset.rssProcessed = '1';
+
             let displayUrl = el.href;
-            let boxTitle = '';
-            if (platform === 'twitter') {
-                boxTitle = 'Twitter/X';
-                if (cfg.twitterMode === 'nitter') {
-                    try {
-                        const u = new URL(el.href);
-                        const parts = u.pathname.split('/').filter(Boolean);
-                        if (parts.length >= 3 && parts[1] === 'status') {
-                            displayUrl = `${cfg.nitterInstance.replace(/\/$/,'')}/${parts[0]}/status/${parts[2]}`;
-                        } else {
-                            displayUrl = `${cfg.nitterInstance.replace(/\/$/,'')}${u.pathname}`;
-                        }
-                    } catch {}
-                }
-            } else if (platform === 'reddit') {
-                boxTitle = 'Reddit';
-                if (cfg.redditMode === 'teddit') {
-                    try {
-                        const u = new URL(el.href);
-                        displayUrl = `${cfg.tedditInstance.replace(/\/$/,'')}${u.pathname}`;
-                    } catch {}
-                }
+            let boxTitle = platform === 'twitter' ? 'Twitter/X' : 'Reddit';
+
+            if (platform === 'twitter' && cfg.twitterMode === 'nitter') {
+                try {
+                    const u = new URL(el.href);
+                    const parts = u.pathname.split('/').filter(Boolean);
+                    if (parts.length >= 3 && parts[1] === 'status') {
+                        displayUrl = `${cfg.nitterInstance.replace(/\/$/, '')}/${parts[0]}/status/${parts[2]}`;
+                    } else {
+                        displayUrl = `${cfg.nitterInstance.replace(/\/$/, '')}${u.pathname}`;
+                    }
+                } catch {}
+            } else if (platform === 'reddit' && cfg.redditMode === 'teddit') {
+                try {
+                    const u = new URL(el.href);
+                    displayUrl = `${cfg.tedditInstance.replace(/\/$/, '')}${u.pathname}`;
+                } catch {}
             }
 
-            // Crear contenedor básico (sin fetch)
             const wrap = el.ownerDocument.createElement('div');
             wrap.className = 'social-embed simple';
             wrap.style.cssText = 'margin:16px 0;padding:12px;border:1px solid var(--background-modifier-border);border-radius:8px;background:var(--background-secondary);';
-            wrap.innerHTML = `<strong>${boxTitle}</strong><div style="margin-top:6px;word-break:break-word;">`+
-                `<a href="${displayUrl}" target="_blank" rel="noopener" class="rss-link">${displayUrl}</a>`+
-                `</div>`;
-            if (el.parentNode) (el.parentNode as any).insertBefore(wrap, el.nextSibling as any);
+            wrap.innerHTML = `<strong>${boxTitle}</strong><div style="margin-top:6px;word-break:break-word;">
+                <a href="${displayUrl}" target="_blank" rel="noopener" class="rss-link">${displayUrl}</a>
+                </div>`;
+            el.parentNode?.insertBefore(wrap as unknown as Node, el.nextSibling);
         };
 
-    twitterLinks.forEach(a => processLink(a,'twitter'));
-    redditLinks.forEach(a => processLink(a,'reddit'));
+        twitterLinks.forEach(a => processLink(a, 'twitter'));
+        redditLinks.forEach(a => processLink(a, 'reddit'));
+
         if (cfg.youtubeMode === 'invidious') {
-            youtubeLinks.forEach(a => {
-                const el = a as HTMLAnchorElement;
-                if (el.dataset['rssInvidious']) return;
-                el.dataset['rssInvidious'] = '1';
+            youtubeLinks.forEach(el => {
+                if (el.dataset.rssInvidious) return;
+                el.dataset.rssInvidious = '1';
                 try {
                     let videoId = '';
                     if (el.href.includes('youtu.be/')) {
@@ -672,126 +667,20 @@ export class ItemModal extends Modal {
                         videoId = u.searchParams.get('v') || '';
                     }
                     if (videoId) {
-                        const base = cfg.invidiousInstance.replace(/\/$/,'');
+                        const base = cfg.invidiousInstance.replace(/\/$/, '');
                         el.href = `${base}/watch?v=${videoId}`;
-                        el.textContent = el.href; // actualizar texto para claridad
+                        el.textContent = el.href;
                     }
                 } catch {}
             });
         }
     }
 
-    private async createSocialEmbed(
-        linkElement: HTMLElement, 
-        originalUrl: string, 
-        platformName: string, 
-        platformIcon: string, 
-        platformColor: string,
-        oembedUrlGenerator: ((url: string) => string) | null
-    ): Promise<void> {
-        // Legacy stub retained for potential future rich embed support.
-        if (this.plugin.settings?.socialEmbeds?.suppressErrors !== false) {
-            // silently ignore
-            return;
-        }
-        console.debug('Rich social embed disabled (stub called)', {originalUrl, platformName});
-    }
-
-    private createBasicEmbedContent(url: string, platformName: string): string {
-        // Extraer información básica de la URL
-        const urlObj = new URL(url);
-        const pathParts = urlObj.pathname.split('/').filter(Boolean);
-        
-        let contentPreview = '';
-        
-        switch (platformName) {
-            case 'Twitter/X':
-                const twitterUsername = pathParts[0];
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="user-info">
-                            <span class="username">@${twitterUsername}</span>
-                        </div>
-                        <div class="post-text">Ver este tweet para acceder al contenido completo</div>
-                    </div>
-                `;
-                break;
-                
-            case 'Instagram':
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="post-text">📸 Publicación de Instagram</div>
-                        <div class="post-meta">Haz clic para ver fotos, videos y contenido</div>
-                    </div>
-                `;
-                break;
-                
-            case 'Facebook':
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="post-text">📱 Publicación de Facebook</div>
-                        <div class="post-meta">Ver publicación completa en Facebook</div>
-                    </div>
-                `;
-                break;
-                
-            case 'Tumblr':
-                const blogName = urlObj.hostname.split('.')[0];
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="user-info">
-                            <span class="username">${blogName}</span>
-                        </div>
-                        <div class="post-text">🎨 Publicación de Tumblr</div>
-                    </div>
-                `;
-                break;
-                
-            case 'Mastodon':
-                const instance = urlObj.hostname;
-                const mastodonUsername = pathParts[0];
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="user-info">
-                            <span class="username">${mastodonUsername}@${instance}</span>
-                        </div>
-                        <div class="post-text">🐘 Publicación en Mastodon</div>
-                    </div>
-                `;
-                break;
-                
-            default:
-                contentPreview = `
-                    <div class="embed-content">
-                        <div class="post-meta">Ver contenido en ${platformName}</div>
-                    </div>
-                `;
-        }
-        
-        return contentPreview;
-    }
-
-    private createFallbackEmbed(linkElement: HTMLElement, url: string, platformName: string, color: string): void {
-        const fallbackEmbed = linkElement.ownerDocument.createElement('div');
-        fallbackEmbed.className = 'social-embed fallback';
-        fallbackEmbed.innerHTML = `
-            <div style="padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-secondary);">
-                <div style="color: var(--text-normal); margin-bottom: 8px;">🔗 ${platformName}</div>
-                <a href="${url}" target="_blank" rel="noopener" style="color: ${color}; text-decoration: none;">Ver publicación</a>
-            </div>
-        `;
-    if (linkElement.parentNode) (linkElement.parentNode as any).insertBefore(fallbackEmbed, linkElement.nextSibling as any);
-    }
-
-    removeDanglingElements(el: HTMLElement) : void {
-        //remove wallabag.xml dangling elements
-        const lists = el.querySelectorAll('li, a, div, p, span');
-        for (let i = 0; i < lists.length; i++) {
-            const listEL = lists.item(i);
-            if(listEL.innerHTML === '') {
-                listEL.remove();
+    private removeDanglingElements(el: HTMLElement): void {
+        el.querySelectorAll('li, a, div, p, span').forEach(element => {
+            if (element.innerHTML.trim() === '') {
+                element.remove();
             }
-        }
+        });
     }
-
 }

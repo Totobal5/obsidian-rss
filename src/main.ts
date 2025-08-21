@@ -307,11 +307,11 @@ export default class RssReaderPlugin extends Plugin {
     }
 
     async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+        await this.saveData(this.settings);
     }
 
     // Unified writeFeedContent method
-        async writeFeedContent(change: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
+    async writeFeedContent(change: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
         const current = this.settings.items || [];
         const updated = change(current);
         await itemsStore.update(() => updated);
@@ -328,6 +328,8 @@ export default class RssReaderPlugin extends Plugin {
             if (this.feedContentSaveTimer) window.clearTimeout(this.feedContentSaveTimer);
             this.feedContentSaveTimer = window.setTimeout(async () => {
                 await this.writeSettings(old => ({ items }));
+                // Persistir a disco la estructura completa (incluye items) para no perder estados read/favorite
+                try { await this.saveSettings(); } catch (e) { console.warn('saveSettings failed after debounced write', e); }
                 this.feedContentSaveTimer = undefined;
             }, delay);
 

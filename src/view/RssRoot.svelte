@@ -70,6 +70,9 @@
             allFeeds = feedsData;
 
             buildActiveFeedsFromSelection();
+            // Inicializar favoritos y contadores al arrancar
+            refreshFavorites(false);
+            recomputeCountMaps();
             rebuildList();
         });
     }
@@ -109,16 +112,31 @@
             const current = plugin.providers.getCurrent();
             if (current && current.folders) { folders = await current.folders(); } else { folders = []; }
         } catch { folders = []; }
-        allFeeds = [];
-        for (const f of folders) allFeeds.push(...f.feeds());
+
+        // IMPORTANT: do NOT repopulate allFeeds from provider feeds here.
+        // Provider feed objects may become stale regarding item read/favorite flags.
+        // We rely on the itemsStore subscription to keep allFeeds ( = feedsData ) canonical.
+        allFeeds = feedsData; // ensure we keep canonical reference
         buildActiveFeedsFromSelection();
-        rebuildList();
         refreshFavorites(false);
     };
 
     function setActiveFeeds(feeds: Feed[]) {
         favoritesMode = false;
         activeFeeds = feeds;
+    }
+
+    // Resolve an incoming (possibly provider-origin) feed to the canonical wrapper from feedsData
+    function canonicalFeed(feed: Feed): Feed {
+        const match = feedsData.find(f => {
+            try { return f.name() === feed.name(); } catch { return false; }
+        });
+
+        return match || feed; // fallback if not found yet
+    }
+
+    function canonicalize(feeds: Feed[]): Feed[] {
+         return feeds.map(canonicalFeed); 
     }
 
     function firstImageFromHtml(html: string): string | undefined {
@@ -150,48 +168,53 @@
 
     // Rebuild the list
 	function rebuildList() {
-        // Show favorites if in favorites mode
+        // Always canonicalize activeFeeds to ensure we use the wrappers whose items reflect latest raw state.
+        if (activeFeeds && activeFeeds.length) {
+            activeFeeds = canonicalize(activeFeeds);
+        }
+        // Keep allFeeds pointing at feedsData (canonical) to avoid stale provider copies.
+        allFeeds = feedsData;
+        // Favoritos: lista directa
         if (favoritesMode) {
-            listItems = favoriteItems.map(it => ({ feed: null as Feed | null, item: it }));
+            // Intenta asociar cada item favorito con su feed real para evitar feed null en la UI
+            listItems = favoriteItems.map(it => {
+                const feedRef = allFeeds.find(f => {
+                    try { return f.name() === it.feed(); } catch { return false; }
+                });
+                return { feed: feedRef ?? null as Feed | null, item: it };
+            });
+            listItems.sort((a,b)=> getPubTime(b.item) - getPubTime(a.item));
             buildGroups();
+            
             return;
         }
 
+        const sourceFeeds = activeFeeds && activeFeeds.length ? activeFeeds : allFeeds;
         const collected: { feed: Feed | null, item: Item }[] = [];
-        const feedMap: Record<string, Feed> = {};
-        for (const feed of allFeeds) {
-            feedMap[feed.name()] = feed;
-        }
 
-        // Helper to check if feed matches current selection
-        function isFeedActive(feed: Feed): boolean {
-            const feedName = feed.name();
-            const folderVal = feed.folderName();
-
-            if (activeFeedName) return feedName === activeFeedName;
-            if (activeFolderName) return folderVal === activeFolderName;
+        function matchesSelection(feed: Feed): boolean {
+            if (activeFeedName) return feed.name() === activeFeedName;
+            if (activeFolderName) return feed.folderName() === activeFolderName;
             return true;
         }
 
-        // Collect items from feeds matching selection
-        for (const feed of allFeeds) {
-            if (!isFeedActive(feed)) continue;
-            for (const item of feed.items()) {
+        for (const feed of sourceFeeds) {
+            if (!matchesSelection(feed)) continue;
+            const its = feed.items();
+            if (!its || !its.length) continue;
+            for (const item of its) {
                 if (item) collected.push({ feed, item });
             }
         }
 
-        // If no selection and nothing collected, show all items
-        if (!activeFeedName && !activeFolderName && collected.length === 0) {
+        // Fallback: si sigue vacío, intentar con todos los feeds
+        if (collected.length === 0 && sourceFeeds !== allFeeds) {
             for (const feed of allFeeds) {
-                for (const item of feed.items()) {
-                    collected.push({ feed, item });
-                }
+                for (const item of feed.items()) collected.push({ feed, item });
             }
         }
 
-        // Sort items by date descending (most recent first)
-        collected.sort((a, b) => getNormalizedDate(b.item).getTime() - getNormalizedDate(a.item).getTime());
+        collected.sort((a, b) => getPubTime(b.item) - getPubTime(a.item));
         listItems = collected;
         buildGroups();
 	}
@@ -204,6 +227,15 @@
             : new Date(0); // Epoch fallback
         date.setHours(0, 0, 0, 0);
         return date;
+    }
+
+    function getPubTime(item: Item): number { 
+        try { 
+            const v = item.pubDate?.();
+            const t = v? Date.parse(v): NaN;
+            return isNaN(t) ? 0 : t;
+
+        } catch { return 0; }
     }
 
 	/**
@@ -254,21 +286,28 @@
             .map(([key, group]) => ({
                 key,
                 label: group.label,
-                items: group.items.sort((a, b) => {
-                    return getNormalizedDate(b.item).getTime() - getNormalizedDate(a.item).getTime();
-                })
+                // Mantener el orden de inserción (ya ordenado globalmente antes de agrupar)
+                items: group.items
             }));
     }
 
-    // Refactored to use FeedsManager instead of CountersService
-    function refreshFavorites(rebuild = true) {
-        favoriteItems = [];
-        // Usa los objetos Item
+    // Optimized favorites refresh with change detection to avoid unnecessary rebuilds
+    function refreshFavorites(rebuildIfActive: boolean = true) {
+        const wasActive = favoritesMode;
+        const prevSet = wasActive ? new Set(favoriteItems.map(i => i.url())) : undefined;
+        const updated: Item[] = [];
         for (const feed of allFeeds) {
-            favoriteItems.push(...feed.items().filter(item => item.starred()));
+            try {
+                for (const it of feed.items()) { if (it.starred()) updated.push(it); }
+            } catch { /* ignore */ }
         }
-
-        if (favoritesMode && rebuild) rebuildList();
+        let changed = updated.length !== favoriteItems.length;
+        if (!changed && prevSet) {
+            for (const it of updated) { if (!prevSet.has(it.url())) { changed = true; break; } }
+        }
+        favoriteItems = updated;
+        favoriteCountVal = favoriteItems.length;
+        if (wasActive && rebuildIfActive && changed) rebuildList();
     }
 
     // Refactored to use services
@@ -349,11 +388,12 @@
     }
 
     function toggleFavorite(item: Item) {
-        plugin.itemStateService.toggleFavorite(item);
-        refreshFavorites(false);
-        try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.FAVORITE_UPDATED)); } catch {}
-        
-        countsVersion++;
+        plugin.itemStateService.toggleFavorite(item).then(()=>{
+            // Update favorites; rebuild only if in favorites mode and changed set
+            refreshFavorites(true);
+            recomputeCountMaps();
+            countsVersion++;
+        });
     }
 
     function toggleRead(item: Item) {
@@ -363,6 +403,11 @@
     }
 
     function openFavorites() {
+        // Si ya estamos en modo favoritos, actúa como toggle para salir
+        if (favoritesMode) { 
+            openAllFeeds(); 
+            return; 
+        }
         favoritesMode = true;
         refreshFavorites();
         
@@ -376,8 +421,8 @@
         favoritesMode = false;
         activeFeedName = null;
         activeFolderName = null;
-        
-        setActiveFeeds(allFeeds);
+        // Use canonical feedsData always
+        setActiveFeeds(feedsData);
         rebuildList();
 
         countsVersion++;
@@ -396,17 +441,21 @@
 
         activeFolderName = name;
         activeFeedName = null;
-        setActiveFeeds(feeds);
+        // Canonicalize feeds to ensure consistent item state
+        setActiveFeeds(canonicalize(feeds));
         rebuildList();
 
         countsVersion++;
     }
 
     function openFeed(feed: Feed) {
-        activeFeedName = feed.name();
-        activeFolderName = feed.folderName();
+        favoritesMode = false;
+
+        const cf = canonicalFeed(feed);
+        activeFeedName = cf.name();
+        activeFolderName = cf.folderName();
         
-        setActiveFeeds([feed]);
+        setActiveFeeds([cf]);
         rebuildList();
 
         countsVersion++;
@@ -468,8 +517,7 @@
         recomputeCountMaps();
         try { document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED)); } catch {}
         if (favoritesMode) refreshFavorites();
-        
-        rebuildList();
+
         countsVersion++;
     }
 	
@@ -477,12 +525,11 @@
         try {
             const rawItems = listItems.map(li => li.item);
             new ItemModal(plugin, item, rawItems).open();
-        } catch {}
 
-        try {
-            document.dispatchEvent(new CustomEvent('rss-item-opened', { 
-                detail:{ id: item?.id } 
-            }) ); 
+            document.dispatchEvent(new CustomEvent('rss-item-opened', {
+                detail:{ id: item?.id }
+            }) );
+
         } catch {}
     }
 
@@ -584,7 +631,7 @@
             <div class="rss-fr-group-header">{g.label}</div>
             {#each g.items as obj (obj.item.url())}
                 <ListItem
-                    feed={obj.feed || ''}
+                    feed={obj.feed ?? undefined}
                     item={obj.item}
                     {deriveThumb}
                     {summary}

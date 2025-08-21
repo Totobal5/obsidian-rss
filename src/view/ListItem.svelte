@@ -19,12 +19,8 @@
     }
 
     function onClick() {
-        // Open modal first to avoid losing context if list re-renders on read toggle
+        if (!item.read()) { toggleRead(item); }
         runOpen();
-        if (!item.read()) {
-            // Defer toggle slightly so modal instantiation is not interrupted by rebuild
-            setTimeout(() => toggleRead(item), 0);
-        }
     }
 
     function formatDate(item: Item): string {
@@ -58,6 +54,7 @@
         type="button"
         class="rss-dot"
         on:click|stopPropagation={() => toggleRead(item)}
+        class:is-read={item.read()}
         aria-label={item.read() ? 'Mark unread' : 'Mark read'}
     ></button>
     
@@ -72,13 +69,13 @@
 
     {#if thumb}
         <div class="rss-fr-thumb-wrapper">
-        <img class="rss-fr-thumb list-item-thumb" src={thumb} alt="" loading="lazy" />
+            <img class="rss-fr-thumb list-item-thumb" src={thumb} alt="" loading="lazy" />
         </div>
     {/if}
 
     <div class="rss-fr-main">
         <div class="rss-fr-feedline">
-            <span class="rss-fr-feed"> {feed.name()} </span>
+            <span class="rss-fr-feed"> {feed ? feed.name() : ''} </span>
         </div>
 
         <div class="rss-fr-top">
