@@ -49,42 +49,49 @@
         tabindex="0"
         aria-label="Open item"
     >
-    <!-- Dot (read/unread) -->
-    <button
-        type="button"
-        class="rss-dot"
-        on:click|stopPropagation={() => toggleRead(item)}
-        class:is-read={item.read()}
-        aria-label={item.read() ? 'Mark unread' : 'Mark read'}
-    ></button>
-    
-    <!-- Star/Favorite -->
-    <button
-        type="button"
-        class="rss-star rss-fr-star"
-        class:is-starred={item.starred()}
-        on:click|stopPropagation={() => toggleFavorite(item)}
-        aria-label={item.starred() ? 'Unfavorite' : 'Favorite'}
-    >★</button>
+        <!-- Dot (read/unread) -->
+        <button
+            type="button"
+            class="rss-dot"
+            on:click|stopPropagation={() => toggleRead(item)}
+            class:is-read={item.read()}
+            aria-label={item.read() ? 'Mark unread' : 'Mark read'}
+        ></button>
+        
+        <!-- Star/Favorite -->
+        <button
+            type="button"
+            class="rss-star rss-fr-star"
+            class:is-starred={item.starred()}
+            on:click|stopPropagation={() => toggleFavorite(item)}
+            aria-label={item.starred() ? 'Unfavorite' : 'Favorite'}
+        >★</button>
+        
+        {#if thumb}
+            <div class="rss-fr-thumb-wrapper">
+                <img 
+                    class="rss-fr-thumb list-item-thumb"
+                    src={thumb}
+                    alt=""
+                    loading="lazy" 
+                    width="120"
+                    height="80"
+                />
+            </div>
+        {/if}
 
-    {#if thumb}
-        <div class="rss-fr-thumb-wrapper">
-            <img class="rss-fr-thumb list-item-thumb" src={thumb} alt="" loading="lazy" />
-        </div>
-    {/if}
+        <div class="rss-fr-main">
+            <div class="rss-fr-feedline">
+                <span class="rss-fr-feed"> {feed ? feed.name() : ''} </span>
+            </div>
 
-    <div class="rss-fr-main">
-        <div class="rss-fr-feedline">
-            <span class="rss-fr-feed"> {feed ? feed.name() : ''} </span>
+            <div class="rss-fr-top">
+                <div class="rss-fr-title list-item-title"> {item.title()} </div>
+                <div class="rss-fr-date"> {formatDate(item)} </div>
+            </div>
+            <div class="rss-fr-desc list-item-description"> {summary(item)} </div>
         </div>
-
-        <div class="rss-fr-top">
-            <div class="rss-fr-title list-item-title"> {item.title()} </div>
-            <div class="rss-fr-date"> {formatDate(item)} </div>
-        </div>
-        <div class="rss-fr-desc list-item-description"> {summary(item)} </div>
     </div>
-  </div>
 {/key}
 
 <!-- styles moved to global main.scss -->

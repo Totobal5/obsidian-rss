@@ -2,8 +2,8 @@ import type {FilteredFolder} from "../modals/FilteredFolderModal";
 import type {RssFeedContent} from "../parser/rssParser";
 
 export interface RssFeed {
-    name: string,
-    url: string,
+    name:   string,
+    url:    string,
     folder: string
 }
 

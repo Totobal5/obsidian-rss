@@ -1,35 +1,27 @@
 import RssRoot from '../src/view/RssRoot.svelte';
-
-function makePlugin(favs: { offsetMs:number; id:string; }[]) {
-  const now = Date.now();
-  const items = favs.map(f=> ({ link:f.id, title:f.id, favorite:true, read:false, pubDate: new Date(now + f.offsetMs).toISOString(), pubDateMs: now + f.offsetMs }));
-  const settingsItems: any[] = [ { name:'Feed1', folder:'FolderA', items } ];
-  const plugin: any = {
-    settings: { items: settingsItems },
-    counters: undefined, // so RssRoot creates CountersService instance
-    providers: { getCurrent: () => ({ folders: async () => [{ name: () => 'FolderA', feeds: () => [{ name: () => 'Feed1', link: () => 'Feed1', items: () => settingsItems[0].items }] }] }) },
-    itemStateService: { toggleFavorite: (it:any)=> { it.favorite = !it.favorite; }, toggleRead: ()=>{} },
-    writeFeedContentDebounced: (fn:Function)=> fn(),
-    updateFeeds: async()=>{}
-  };
-  return plugin;
-}
+import { createTestPlugin } from './utils/testPlugin';
 
 describe('Favorites ordering matches main (desc by time)', () => {
   test('favorites newest first via CountersService', async () => {
-    const plugin = makePlugin([
-      { offsetMs: -1000 * 60 * 60 * 4, id:'old-4h' },
-      { offsetMs: -1000 * 60 * 20, id:'recent-20m' },
-      { offsetMs: -1000 * 60 * 5, id:'mid-5m' },
+    const now = Date.now();
+    const plugin = createTestPlugin([
+      { folder:'FolderA', feeds:[ { name:'Feed1', items:[
+        { link:'old-4h', title:'old-4h', favorite:true, read:false, pubDate: new Date(now - 1000*60*60*4).toISOString() },
+        { link:'recent-20m', title:'recent-20m', favorite:true, read:false, pubDate: new Date(now - 1000*60*20).toISOString() },
+        { link:'mid-5m', title:'mid-5m', favorite:true, read:false, pubDate: new Date(now - 1000*60*5).toISOString() },
+      ] } ] }
     ]);
     const target = document.createElement('div');
     document.body.appendChild(target);
     new (RssRoot as any)({ target, props:{ plugin } });
-    await new Promise(r=> setTimeout(r,0));
-    const counters = (plugin as any).counters;
-    const favs = counters.favoriteItems().map((i:any)=> i.title);
-    expect(favs[0]).toBe('mid-5m');
-    expect(favs[1]).toBe('recent-20m');
-    expect(favs[2]).toBe('old-4h');
+  await new Promise(r=> setTimeout(r,0));
+  await new Promise(r=> setTimeout(r,0));
+  document.dispatchEvent(new CustomEvent('___TEST_OPEN_FAVORITES'));
+  await new Promise(r=> setTimeout(r,0));
+  await new Promise(r=> setTimeout(r,0));
+  const titles = Array.from(target.querySelectorAll('.list-item-title')).map(e=> e.textContent);
+  expect(titles[0]).toContain('mid-5m');
+  expect(titles[1]).toContain('recent-20m');
+  expect(titles[2]).toContain('old-4h');
   });
 });

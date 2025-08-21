@@ -13,11 +13,11 @@ jest.unstable_mockModule('../src/parser/rssParser', () => ({
   getFeedItems: async () => ({ name:'Feed1', folder:'', title:'Title', description:'', image:'', link:'', items:[ { link:'a', title:'A', read:false } ] })
 }));
 
-describe('FeedUpdater', () => {
+describe('FeedsManager', () => {
   test('updateFeeds merges new feed items', async () => {
-    const { FeedUpdater } = await import('../src/services/FeedsManager');
+    const { FeedsManager } = await import('../src/services/FeedsManager');
     const plugin:any = new FakePlugin();
-    const updater = new FeedUpdater(plugin);
+    const updater = new FeedsManager(plugin);
     await updater.updateFeeds();
     expect(plugin.settings.items.length).toBe(1);
     expect(plugin.settings.items[0].items.length).toBe(1);

@@ -17,7 +17,8 @@ import {
     folderStore
 } from '../stores';
 
-import { SortOrder } from '../modals/FilteredFolderModal';
+import { SortOrder, type FilteredFolder } from '../modals/FilteredFolderModal';
+import type { FilteredFolderContent } from '../stores';
 
 /**
  * Service responsible for updating RSS feeds, sorting RSS feed content, preserving user state, 
@@ -108,11 +109,18 @@ export class FeedsManager {
             }
 
             // Descargar todos los feeds en paralelo con timeout
-            const feedPromises = feeds.map(feed =>
-                this.fetchFeedWithTimeout(feed, 15000)
+            const feedPromises = feeds.map((feed: RssFeed) =>
+                this.fetchFeedWithTimeout(feed, 15000).then(result => {
+                    if (!result) {
+                        // Mark the feed as failed with error property
+                        return { ...feed, error: 'Failed to fetch or returned error', items: [] as RssFeedItem[] };
+                    }
+                    return result;
+                })
             );
             const results = await Promise.all(feedPromises);
-            const newFeeds = results.filter(Boolean) as RssFeedContent[];
+            // Filter out feeds with error before updating itemsStore
+            const newFeeds = results.filter((result: any) => !result.error) as RssFeedContent[];
 
             // Leer feeds existentes desde el store
             let existingFeeds: RssFeedContent[] = [];
@@ -125,21 +133,20 @@ export class FeedsManager {
             // Actualizar el store reactivo (esto actualiza la UI y otros servicios)
             itemsStore.set(finalFeeds);
 
-            // Persistir en settings usando el nuevo método del plugin
-            if (this.plugin.writeFeedContent) {
-                await this.plugin.writeFeedContent(() => finalFeeds);
+            // Invalidar cache local
+            const localProvider = this.plugin.providers.getById?.('local') as LocalFeedProvider | undefined;
+            if (localProvider) {
+                localProvider.invalidateCache();
             }
 
-            // Invalidar cache local
-            const localProvider = await this.plugin.providers.getById('local') as LocalFeedProvider;
-            localProvider?.invalidateCache();
+            await this.plugin.writeFeedContent(() => finalFeeds);
 
             // Procesar filtros
             this.processFilters();
 
             new Notice(t('refreshed_feeds'));
             console.log(`Feed update completed in ${(performance.now() - updateStartTime).toFixed(2)}ms total`);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Error updating feeds:', error);
         } finally {
             this.updating = false;
@@ -371,7 +378,7 @@ export class FeedsManager {
 
         // Apply feed filters
         if (filter.filterFeeds && filter.filterFeeds.length > 0) {
-            filtered = filtered.filter(item => filter.filterFeeds.includes(item.feedName || ''));
+            filtered = filtered.filter(item => filter.filterFeeds.includes((item as any).feed || ''));
         }
 
         // Apply tag filters
@@ -388,7 +395,7 @@ export class FeedsManager {
         }
 
         if (filter.ignoreFeeds && filter.ignoreFeeds.length > 0) {
-            filtered = filtered.filter(item => !filter.ignoreFeeds.includes(item.feedName || ''));
+            filtered = filtered.filter(item => !filter.ignoreFeeds.includes((item as any).feed || ''));
         }
 
         if (filter.ignoreTags && filter.ignoreTags.length > 0) {
@@ -400,7 +407,7 @@ export class FeedsManager {
 
         // Apply sorting
         if (filter.sortOrder) {
-            filtered = this.sortItems(filtered, filter.sortOrder);
+            filtered = this.sortItems(filtered, filter.sortOrder as unknown as SortOrder);
         }
 
         return filtered;
@@ -533,11 +540,13 @@ export class FeedsManager {
         });
 
         // Add Obsidian vault tags
-        const metadataCache = this.plugin.app.metadataCache as any;
-        const fileTags = metadataCache.getTags?.() || {};
-        for (const tag of Object.keys(fileTags)) {
-            tags.push(tag.replace('#', ''));
-        }
+        try {
+            const metadataCache = (this.plugin as any).app?.metadataCache;
+            const fileTags = metadataCache?.getTags?.() || {};
+            for (const tag of Object.keys(fileTags)) {
+                tags.push(tag.replace('#', ''));
+            }
+        } catch { /* optional in tests */ }
 
         // Update store
         tagsStore.update(() => new Set<string>(tags.filter(tag => tag.length > 0)));

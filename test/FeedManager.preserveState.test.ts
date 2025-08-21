@@ -12,12 +12,13 @@ jest.unstable_mockModule('../src/parser/rssParser', () => ({
   getFeedItems: async () => ({ name:'Feed1', folder:'', title:'TitleNew', description:'', image:'', link:'', items:[ { link:'a', title:'A UPDATED', read:false, favorite:false, created:false, visited:false, tags:[], highlights:[] } ] })
 }));
 
-describe('FeedUpdater preserves item state', () => {
+describe('FeedsManager preserves item state', () => {
   test('read/favorite flags stay true after refresh', async () => {
-    const { FeedUpdater } = await import('../src/services/FeedsManager');
+    const { FeedsManager } = await import('../src/services/FeedsManager');
     const plugin:any = new FakePlugin();
-    const updater = new FeedUpdater(plugin);
+    const updater = new FeedsManager(plugin);
     await updater.updateFeeds();
+    
     expect(plugin.settings.items[0].items[0].read).toBe(true);
     expect(plugin.settings.items[0].items[0].favorite).toBe(true);
     expect(plugin.settings.items[0].title).toBe('TitleNew');

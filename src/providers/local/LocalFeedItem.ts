@@ -58,7 +58,7 @@ export class LocalFeedItem implements Item {
     }
 
     id(): string | number {
-        return undefined;
+        return this.item.id;
     }
 
     language(): string | undefined {
@@ -82,19 +82,22 @@ export class LocalFeedItem implements Item {
     }
 
     mediaThumbnail(): string {
-        // Priorizar el campo image del item
-        if (this.item.image && this.item.image.length > 0) {
-            return this.item.image;
-        }
-        
-        // Si no hay imagen, buscar en el contenido HTML
+        if (this.item.image) return this.item.image;
+
         if (this.item.content) {
-            const imgMatch = this.item.content.match(/<img[^>]+src="([^"]+)"/);
-            if (imgMatch) {
-                return imgMatch[1];
+            const idx = this.item.content.indexOf('<img');
+            if (idx !== -1) {
+                const srcIdx = this.item.content.indexOf('src="', idx);
+                if (srcIdx !== -1) {
+                    const start = srcIdx + 5;
+                    const end = this.item.content.indexOf('"', start);
+                    if (end !== -1) {
+                        return this.item.content.substring(start, end);
+                    }
+                }
             }
         }
-        
+
         return "";
     }
     
@@ -103,7 +106,6 @@ export class LocalFeedItem implements Item {
     }
 
     read(): boolean {
-        // Return actual persisted read state
         return this.item.read;
     }
 

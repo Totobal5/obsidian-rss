@@ -571,7 +571,7 @@
 
         } catch {}
     }
-    
+
     function stripHtml(str: string) {
         // Remove style, script, img, figure tags and all other HTML tags in one pass
         return str
@@ -667,22 +667,40 @@
         {#if listItems.length === 0}
             <div class="rss-fr-empty">No items</div>
         {:else}
-            <VirtualList items={flatListItems} rowHeight={112} let:item>
-                {#if item.type === 'header'}
-                    <div class="rss-fr-group-header">{item.label}</div>
-                {:else}
-                    <ListItem
-                        feed={item.item.feed ?? undefined}
-                        item={item.item.item}
-                        {deriveThumb}
-                        {summary}
-                        {toggleRead}
-                        {toggleFavorite}
-                        onOpen={openItem}
-                    />
-                {/if}
-            </VirtualList>
-            <div bind:this={sentinel}></div>
+            {#if flatListItems.length < 500}
+                {#each flatListItems as item (item.type === 'header' ? item.label : item.item.item.url())}
+                    {#if item.type === 'header'}
+                        <div class="rss-fr-group-header">{item.label}</div>
+                    {:else}
+                        <ListItem
+                            feed={item.item.feed ?? undefined}
+                            item={item.item.item}
+                            {deriveThumb}
+                            {summary}
+                            {toggleRead}
+                            {toggleFavorite}
+                            onOpen={openItem}
+                        />
+                    {/if}
+                {/each}
+            {:else}
+                <VirtualList items={flatListItems} rowHeight={112} itemHeight={112} let:item>
+                    {#if item.type === 'header'}
+                        <div class="rss-fr-group-header">{item.label}</div>
+                    {:else}
+                        <ListItem
+                            feed={item.item.feed ?? undefined}
+                            item={item.item.item}
+                            {deriveThumb}
+                            {summary}
+                            {toggleRead}
+                            {toggleFavorite}
+                            onOpen={openItem}
+                        />
+                    {/if}
+                </VirtualList>
+                <div bind:this={sentinel}></div>
+            {/if}
         {/if}
     </div>
     <div class="rss-fr-detail hidden"></div>

@@ -9,9 +9,9 @@ import {
 import RssReaderPlugin from "../main";
 import Action from "../actions/Action";
 import t from "../l10n/locale";
-import {copy, rssToMd} from "../functions";
-import type {Item} from "../providers/Item";
-import {pluginApi} from "@vanakat/plugin-api";
+import { copy, rssToMd } from "../functions";
+import type { Item } from "../providers/Item";
+import { pluginApi } from "@vanakat/plugin-api";
 
 declare global {
     interface Window {

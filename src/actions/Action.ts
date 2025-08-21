@@ -29,7 +29,8 @@ export default class Action {
         const modal = new TagModal(plugin, item.tags());
         modal.onClose = async () => {
             item.setTags(modal.tags);
-            await plugin.settingsManager.writeFeedContentDebounced(()=>{},250);
+            // Updated to use unified debounced write method on plugin
+            await plugin.writeFeedContentDebounced(()=>{},250);
         };
         modal.open();
         return Promise.resolve();

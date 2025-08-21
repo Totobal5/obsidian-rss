@@ -108,16 +108,19 @@ button.rss-star {
 
 button.rss-dot {
     background: var(--interactive-accent);
-    border: 0;
+    border: none;
     border-radius: 50%;
-    width: 4px;
-    height: px;
-    margin-top: 2px;
+    width: 3px;
+    height: 3px;
+    margin: 0;
     cursor: pointer;
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 }
 
-.read > button.rss-dot {
+.rss-fr-row-article.read > button.rss-dot {
     background: transparent;
 }
 

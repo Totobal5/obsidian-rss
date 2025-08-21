@@ -2,8 +2,8 @@ import type RssReaderPlugin from '../main';
 import {RSS_EVENTS} from '../events';
 import t from '../l10n/locale';
 import {Notice} from 'obsidian';
-import type { Item } from 'src/providers/Item';
-import type { RssFeedContent, RssFeedItem } from 'src/parser/rssParser';
+import type { Item } from '../providers/Item';
+import type { RssFeedContent, RssFeedItem } from '../parser/rssParser';
 
 /**
  * Service class for managing the state of RSS feed items, such as read/unread and favorite status.

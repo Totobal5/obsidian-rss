@@ -6,7 +6,6 @@ export enum FeedOrder {
     NEWEST_FIRST,
 }
 
-
 /**
  * Represents an RSS feed with its metadata and items.
  *

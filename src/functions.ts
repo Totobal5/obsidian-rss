@@ -7,6 +7,7 @@ import {
     MarkdownPreviewRenderer,
     moment
 } from "obsidian";
+
 import { TextInputPrompt } from "./modals/TextInputPrompt";
 import { FILE_NAME_REGEX } from "./consts";
 import RssReaderPlugin from "./main";
@@ -330,6 +331,7 @@ export function rssToMd(plugin: RssReaderPlugin, content: string): string {
     if (!plugin.settings.displayMedia) {
         markdown = markdown.replace(EMBED_REGEX, "$1");
     }
+
     return markdown;
 }
 
@@ -396,16 +398,7 @@ const STANDALONE_IMAGE_PATTERN = /(\n\s*\n)\s*(!?\[[^\]]*\]\([^)]+\))\s*(\n\s*\n
  */
 function centerStandaloneImages(markdown: string): string {
     return markdown.replace(STANDALONE_IMAGE_PATTERN, (fullMatch, before, imageMarkdown, after) => {
-        // Extract alt text from image markdown
-        const altTextMatch = imageMarkdown.match(/!\[([^\]]*)\]/);
-        const altText = altTextMatch ? altTextMatch[1] : "";
-        const isDetailedAlt = altText.length > 50;
-
-        // Center image if alt text is not too long
-        if (!isDetailedAlt) {
-            return `${before}<div align="center">\n\n${imageMarkdown}\n\n</div>${after}`;
-        }
-        return fullMatch;
+        return `${before}<div align="center">\n\n${imageMarkdown}\n\n</div>${after}`;
     });
 }
 
@@ -454,7 +447,6 @@ export async function copy(
 ) {
     await navigator.clipboard.writeText(content).then(success, failure);
 }
-
 
 /**
  * Converts a raw `RssFeedItem` object into an `Item` object with getter and setter methods.
