@@ -12,9 +12,10 @@
     import ListItem from './ListItem.svelte';
     // Import stores
     import { feedsStore, itemsStore } from '../stores';
-    import type { RssFeed } from "src/settings/settings";
     import type { RssFeedContent } from "src/parser/rssParser";
     
+    import VirtualList from "@sveltejs/svelte-virtual-list/VirtualList.svelte";
+
     export let plugin: RssReaderPlugin;
 
 	// --- STATE VARIABLES ---
@@ -61,12 +62,20 @@
     let favoriteCountVal = 0;
     let globalUnreadVal = 0;
     
+    let visibleGroups = 5;
+    const groupsPerPage = 5;
+    let sentinel: HTMLDivElement;
+    let observer: IntersectionObserver;
+    
+    let flatListItems: Array<{ type: 'header' | 'item', label?: string, item?: { feed: Feed | null, item: Item } }> = [];
+
     // Subscribe to itemsStore for reactive data
     $: if (plugin?.feedsManager && !unsubItems) {
         unsubItems = itemsStore.subscribe((feeds) => {
             // Update to the current feeds data.
             feedsDataRaw = feeds;
-            feedsData = feedsDataRaw.map(toFeed);
+            // Filtrar feeds con error antes de pasarlos a la UI
+            feedsData = feedsDataRaw.filter(feed => !(feed && (feed as any).error)).map(toFeed);
             allFeeds = feedsData;
 
             buildActiveFeedsFromSelection();
@@ -83,6 +92,9 @@
             unsubItems();
             unsubItems = undefined;
         }
+
+        if (observer && sentinel) observer.unobserve(sentinel as Element);
+        observer = null;
     });
 
     function buildActiveFeedsFromSelection() {
@@ -136,27 +148,43 @@
     }
 
     function canonicalize(feeds: Feed[]): Feed[] {
-         return feeds.map(canonicalFeed); 
+        return feeds.map(canonicalFeed); 
     }
+
+    const imgSrcRegex = /<img[^>]+src=["']([^"']+)["']/i;
 
     function firstImageFromHtml(html: string): string | undefined {
         if (!html) return undefined;
-        try {
-            const m = html.match(/<img[^>]+src="([^"]+)"/i);
-            return m ? m[1] : undefined;
-        } catch { return undefined; }
+        // Limit for the first 2-4 KB
+        const snippet = html.slice(0, 4096);
+        const m = imgSrcRegex.exec(snippet);
+        return m ? m[1] : undefined;
     }
 
+    // Returns the thumbnail URL for an item, caching the result for future calls
     function deriveThumb(item: Item): string | undefined {
-        try {
-          const image = item.mediaThumbnail();
-          if (image) {
+        // Use a symbol for cache to avoid property conflicts
+        const cacheKey = '_thumb';
+        if (cacheKey in item) return (item as any)[cacheKey];
+
+        // Try mediaThumbnail first
+        const image = item.mediaThumbnail?.();
+        if (image) {
+            (item as any)[cacheKey] = image;
             return image;
-          } else {
-            const html = item.body();
-            if (html) return firstImageFromHtml(html || '');
-          }
-        } catch { return undefined; }
+        }
+
+        // Fallback: extract first image from HTML body
+        const html = item.body?.();
+        if (html) {
+            const thumb = firstImageFromHtml(html);
+            (item as any)[cacheKey] = thumb;
+            return thumb;
+        }
+
+        // No thumbnail found
+        (item as any)[cacheKey] = undefined;
+        return undefined;
     }
 
     // Helper to determine group order
@@ -218,6 +246,16 @@
         listItems = collected;
         buildGroups();
 	}
+
+    function buildFlatList() {
+        flatListItems = [];
+        for (const group of grouped) {
+            flatListItems.push({ type: 'header', label: group.label });
+            for (const li of group.items) {
+                flatListItems.push({ type: 'item', item: li });
+            }
+        }
+    }
 
     // Helper to get normalized date from an item
     function getNormalizedDate(item: Item): Date {
@@ -286,9 +324,10 @@
             .map(([key, group]) => ({
                 key,
                 label: group.label,
-                // Mantener el orden de inserción (ya ordenado globalmente antes de agrupar)
                 items: group.items
             }));
+        
+        buildFlatList();
     }
 
     // Optimized favorites refresh with change detection to avoid unnecessary rebuilds
@@ -532,26 +571,17 @@
 
         } catch {}
     }
-
-    function onRowClick(raw: Item) {
-        if (!raw.read) { toggleRead(raw); }
-        openItem(raw);
-    }
-
-	// UTIL: plain-text resumen sin imágenes para la lista
+    
     function stripHtml(str: string) {
-        try { 
-            return str
-                .replace(/<style[\s\S]*?<\/style>/gi,'')
-                .replace(/<script[\s\S]*?<\/script>/gi,'')
-                .replace(/<img[^>]*>/gi,' ')
-                .replace(/<figure[\s\S]*?<\/figure>/gi,' ')
-                .replace(/<[^>]+>/g,' ') // tags
-                .replace(/&nbsp;/gi,' ')
-                .replace(/&amp;/gi,'&')
-                .replace(/\s+/g,' ')
-                .trim();
-        } catch { return str; }
+        // Remove style, script, img, figure tags and all other HTML tags in one pass
+        return str
+            .replace(/<(style|script|figure)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+            .replace(/<img[^>]*>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
     function summary(item: Item) {
@@ -581,21 +611,31 @@
         await loadFolders();
 
         document.addEventListener(RSS_EVENTS.UNREAD_COUNTS_CHANGED, () => {
-            recomputeCountMaps(); 
-            rebuildList(); 
-            countsVersion++; 
+            recomputeCountMaps();
+            countsVersion++;
+
         }, { passive: true });
 
         document.addEventListener(RSS_EVENTS.FAVORITE_UPDATED, () => {
             refreshFavorites(true);
-            recomputeCountMaps(); // Recalculate favorite count
+            recomputeCountMaps();
             countsVersion++;
+
         }, { passive: true });
 
         // Listener de test: permitir activar modo favoritos vía evento personalizado
         document.addEventListener('___TEST_OPEN_FAVORITES', () => {
             openFavorites();
+
         }, { passive: true });
+
+        observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && visibleGroups < grouped.length) {
+            visibleGroups += groupsPerPage;
+            }
+        });
+
+        if (sentinel) observer.observe(sentinel);    
     });
 
 </script>
@@ -627,20 +667,22 @@
         {#if listItems.length === 0}
             <div class="rss-fr-empty">No items</div>
         {:else}
-        {#each grouped as g (g.key)}
-            <div class="rss-fr-group-header">{g.label}</div>
-            {#each g.items as obj (obj.item.url())}
-                <ListItem
-                    feed={obj.feed ?? undefined}
-                    item={obj.item}
-                    {deriveThumb}
-                    {summary}
-                    {toggleRead}
-                    {toggleFavorite}
-                    onOpen={openItem}
-                />
-            {/each}
-        {/each}
+            <VirtualList items={flatListItems} rowHeight={112} let:item>
+                {#if item.type === 'header'}
+                    <div class="rss-fr-group-header">{item.label}</div>
+                {:else}
+                    <ListItem
+                        feed={item.item.feed ?? undefined}
+                        item={item.item.item}
+                        {deriveThumb}
+                        {summary}
+                        {toggleRead}
+                        {toggleFavorite}
+                        onOpen={openItem}
+                    />
+                {/if}
+            </VirtualList>
+            <div bind:this={sentinel}></div>
         {/if}
     </div>
     <div class="rss-fr-detail hidden"></div>
