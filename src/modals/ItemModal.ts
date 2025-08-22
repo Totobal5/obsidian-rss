@@ -335,11 +335,18 @@ export class ItemModal extends Modal {
     private getBodyHtml(): string {
         const bodyText = this.item.body();
         if (bodyText && bodyText.trim().length > 0) {
+            // Si es texto plano (no contiene etiquetas HTML), reemplazar \n por <br>
+            if (!bodyText.includes('<') && bodyText.includes('\n')) {
+                return bodyText.replace(/\n/g, '<br>');
+            }
             return bodyText;
         }
 
         const descText = this.item.description();
         if (descText && descText.trim().length > 0) {
+            if (!descText.includes('<') && descText.includes('\n')) {
+                return descText.replace(/\n/g, '<br>');
+            }
             return descText;
         }
 
@@ -494,8 +501,8 @@ export class ItemModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
 
-        const feedContents = this.plugin.settings.items;
-        await this.plugin.writeFeedContent(() => feedContents);
+        // const feedContents = this.plugin.settings.items;
+        // await this.plugin.writeFeedContent(() => feedContents, 250);
     }
 
     async onOpen(): Promise<void> {

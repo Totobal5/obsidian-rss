@@ -19,6 +19,7 @@ import {
 
 import { SortOrder, type FilteredFolder } from '../modals/FilteredFolderModal';
 import type { FilteredFolderContent } from '../stores';
+import { get } from 'svelte/store';
 
 /**
  * Service responsible for updating RSS feeds, sorting RSS feed content, preserving user state, 
@@ -53,6 +54,9 @@ export class FeedsManager {
 
     // Map of feed items by their unique hash
     private itemByHash = new Map<string, RssFeedItem>();
+
+    // Map of unread count global
+    private unreadCount = new Map<string, number>();
 
     // Map of unread count by feed
     private unreadCountByFeed = new Map<string, number>();
@@ -99,10 +103,7 @@ export class FeedsManager {
 
         try {
             // Leer feeds configurados desde el store
-            let feeds: RssFeed[] = [];
-            const unsub = feedsStore.subscribe(v => feeds = v);
-            unsub();
-
+            let feeds: RssFeed[] = get(feedsStore);
             // Si el store está vacío, usar settings del plugin como fallback
             if (!feeds.length && this.plugin.settings?.feeds) {
                 feeds = this.plugin.settings.feeds;
@@ -123,9 +124,7 @@ export class FeedsManager {
             const newFeeds = results.filter((result: any) => !result.error) as RssFeedContent[];
 
             // Leer feeds existentes desde el store
-            let existingFeeds: RssFeedContent[] = [];
-            const unsubItems = itemsStore.subscribe(v => existingFeeds = v);
-            unsubItems();
+            let existingFeeds: RssFeedContent[] = get(itemsStore);
 
             // Fusionar feeds nuevos con los existentes
             const finalFeeds = this.mergeFeeds(newFeeds, existingFeeds);
@@ -335,20 +334,15 @@ export class FeedsManager {
         for (const item of this.itemByLink.values()) {
             items.push(item);
         }
-        
         // Si el índice está vacío, leer desde el store
         if (items.length === 0) {
-            let feeds: RssFeedContent[] = [];
-            const unsubItems = itemsStore.subscribe(v => feeds = v);
-            unsubItems();
-            
+            const feeds: RssFeedContent[] = get(itemsStore);
             feeds.forEach((feed: RssFeedContent) => {
                 if (feed && feed.items) {
                     items.push(...feed.items);
                 }
             });
         }
-        
         return items;
     }
 
@@ -563,9 +557,7 @@ export class FeedsManager {
         }
         // Include configured feeds folders even if no items fetched yet
         try {
-            let configured: RssFeed[] = [];
-            const unsub = feedsStore.subscribe(v => configured = v);
-            unsub();
+            let configured: RssFeed[] = get(feedsStore);
             if (!configured || configured.length === 0) configured = this.plugin.settings?.feeds || [];
             configured.forEach(f => { if (f && (f as any).folder) foldersSet.add((f as any).folder); });
         } catch {}

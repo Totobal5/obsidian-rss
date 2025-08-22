@@ -14,7 +14,7 @@
     import type { RssFeedContent } from "src/parser/rssParser";
     
     import VirtualList from "@sveltejs/svelte-virtual-list/VirtualList.svelte";
-  import { LocalFeed } from "src/providers/local/LocalFeed";
+    import { LocalFeed } from "src/providers/local/LocalFeed";
 
     export let plugin: RssReaderPlugin;
 
@@ -83,6 +83,8 @@
             refreshFavorites(false);
             recomputeCountMaps();
             rebuildList();
+            loadFolders();
+			loadFolders();
         });
     }
 
@@ -356,15 +358,15 @@
         // Use feedsManager to get all items instead of direct access
         if (plugin.feedsManager) {
             // Get all items and mark them as read
-            await plugin.writeFeedContentDebounced((items) => {
-            for (const fc of items) {
-                if (Array.isArray(fc.items)) {
-                    for (const it of fc.items) {
-                        it.read = true;
-                        if (it.link) affectedLinks.push(it.link);
+            await plugin.writeFeedContent((items) => {
+                for (const fc of items) {
+                    if (Array.isArray(fc.items)) {
+                        for (const it of fc.items) {
+                            it.read = true;
+                            if (it.link) affectedLinks.push(it.link);
+                        }
                     }
                 }
-            }
             }, 250);
         }
 
@@ -383,7 +385,7 @@
         const affectedLinks: string[] = [];
 
         // Use feedsManager for consistent data access
-        await plugin.writeFeedContentDebounced((items) => {
+        await plugin.writeFeedContent((items) => {
             for (const fc of items) {
                 if (fc.folder && fc.folder.toLowerCase()===lc && Array.isArray(fc.items)) {
                     for (const it of fc.items) {
@@ -406,7 +408,7 @@
     async function markFeedAsRead(feed: Feed){
         const affectedLinks: string[] = [];
         // Use feedsManager to access feed content
-        await plugin.writeFeedContentDebounced((items) => {
+        await plugin.writeFeedContent((items) => {
             for (const fc of items) {
                 if (fc.name === feed.name() || fc.link === feed.url() && Array.isArray(fc.items)) {
                     for (const it of fc.items) {
@@ -635,7 +637,7 @@
             }
         });
 
-        if (sentinel) observer.observe(sentinel);    
+        if (sentinel) observer.observe(sentinel as Element);    
     });
 
 </script>
