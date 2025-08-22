@@ -1,7 +1,7 @@
 import type RssReaderPlugin from '../main';
 import {getFeedItems} from '../parser/rssParser';
 import type { RssFeedContent, RssFeedItem } from '../parser/rssParser';
-import type { RssFeed } from '../settings/settings'; // Fixed import path
+import type { RssFeed } from '../settings/settings';
 
 import {LocalFeedProvider} from '../providers/local/LocalFeedProvider';
 import t from '../l10n/locale';
@@ -557,12 +557,18 @@ export class FeedsManager {
      * @private
      */
     private updateFoldersStore(items: RssFeedItem[]): void {
-        const folders: string[] = [];
+        const foldersSet = new Set<string>();
         for (const item of items) {
-            if (item !== undefined && item.folder) {
-                folders.push(item.folder);
-            }
+            if (item && item.folder) foldersSet.add(item.folder);
         }
-        folderStore.update(() => new Set<string>(folders.filter(folder => folder !== undefined && folder.length > 0)));
+        // Include configured feeds folders even if no items fetched yet
+        try {
+            let configured: RssFeed[] = [];
+            const unsub = feedsStore.subscribe(v => configured = v);
+            unsub();
+            if (!configured || configured.length === 0) configured = this.plugin.settings?.feeds || [];
+            configured.forEach(f => { if (f && (f as any).folder) foldersSet.add((f as any).folder); });
+        } catch {}
+        folderStore.update(() => new Set<string>(Array.from(foldersSet).filter(f => f && f.length > 0)));
     }    
 }

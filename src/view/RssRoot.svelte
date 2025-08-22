@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { toItem, toFeed } from "../functions"
     import { onMount, onDestroy } from 'svelte';
     import FolderView from './FolderView.svelte';
     import type RssReaderPlugin from '../main';
@@ -15,6 +14,7 @@
     import type { RssFeedContent } from "src/parser/rssParser";
     
     import VirtualList from "@sveltejs/svelte-virtual-list/VirtualList.svelte";
+  import { LocalFeed } from "src/providers/local/LocalFeed";
 
     export let plugin: RssReaderPlugin;
 
@@ -75,7 +75,7 @@
             // Update to the current feeds data.
             feedsDataRaw = feeds;
             // Filtrar feeds con error antes de pasarlos a la UI
-            feedsData = feedsDataRaw.filter(feed => !(feed && (feed as any).error)).map(toFeed);
+            feedsData = feedsDataRaw.filter(feed => !(feed && (feed as any).error)).map(raw => new LocalFeed(raw));
             allFeeds = feedsData;
 
             buildActiveFeedsFromSelection();
@@ -667,40 +667,22 @@
         {#if listItems.length === 0}
             <div class="rss-fr-empty">No items</div>
         {:else}
-            {#if flatListItems.length < 500}
-                {#each flatListItems as item (item.type === 'header' ? item.label : item.item.item.url())}
-                    {#if item.type === 'header'}
-                        <div class="rss-fr-group-header">{item.label}</div>
-                    {:else}
-                        <ListItem
-                            feed={item.item.feed ?? undefined}
-                            item={item.item.item}
-                            {deriveThumb}
-                            {summary}
-                            {toggleRead}
-                            {toggleFavorite}
-                            onOpen={openItem}
-                        />
-                    {/if}
-                {/each}
-            {:else}
-                <VirtualList items={flatListItems} rowHeight={112} itemHeight={112} let:item>
-                    {#if item.type === 'header'}
-                        <div class="rss-fr-group-header">{item.label}</div>
-                    {:else}
-                        <ListItem
-                            feed={item.item.feed ?? undefined}
-                            item={item.item.item}
-                            {deriveThumb}
-                            {summary}
-                            {toggleRead}
-                            {toggleFavorite}
-                            onOpen={openItem}
-                        />
-                    {/if}
-                </VirtualList>
-                <div bind:this={sentinel}></div>
-            {/if}
+            <VirtualList items={flatListItems} rowHeight={112} let:item>
+                {#if item.type === 'header'}
+                    <div class="rss-fr-group-header">{item.label}</div>
+                {:else}
+                    <ListItem
+                        feed={item.item.feed ?? undefined}
+                        item={item.item.item}
+                        {deriveThumb}
+                        {summary}
+                        {toggleRead}
+                        {toggleFavorite}
+                        onOpen={openItem}
+                    />
+                {/if}
+            </VirtualList>
+            <div bind:this={sentinel}></div>
         {/if}
     </div>
     <div class="rss-fr-detail hidden"></div>

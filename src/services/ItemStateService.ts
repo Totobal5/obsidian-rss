@@ -29,10 +29,10 @@ export class ItemStateService {
         const newState = !item.read();
 
         // Use the unified write method with proper mutator
-        await this.plugin.writeFeedContentDebounced((items) => {
+        await this.plugin.writeFeedContent((items) => {
             this.syncRawInItems(items, item, {read: newState});
         }, 250);
-
+        
         // Dispatch events
         try { 
             document.dispatchEvent(new CustomEvent(RSS_EVENTS.UNREAD_COUNTS_CHANGED));
@@ -50,7 +50,7 @@ export class ItemStateService {
     async toggleFavorite(item: Item): Promise<boolean> {
         const newFav = !item.starred();
 
-        await this.plugin.writeFeedContentDebounced((items) => {
+        await this.plugin.writeFeedContent((items) => {
             this.syncRawInItems(items, item, { favorite: newFav });
         }, 250);
 

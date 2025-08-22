@@ -310,53 +310,55 @@ export default class RssReaderPlugin extends Plugin {
         await this.saveData(this.settings);
     }
 
-    // Unified writeFeedContent method
-    async writeFeedContent(change: (items: RssFeedContent[]) => RssFeedContent[]): Promise<void> {
-        const current = this.settings.items || [];
-        const updated = change(current);
-        await itemsStore.update(() => updated);
-        await this.writeSettingsInternal(o => ({items: updated}));
-    }
-
-    // Unified writeFeedContentDebounced method
-    async writeFeedContentDebounced(mutator: (items: RssFeedContent[]) => void, delay = 250): Promise<void> {
+    /**
+     * Unified writeFeedContent.
+     * Accepts either a mutator (in-place) or a pure function returning a new array.
+     * Always writes an immutable cloned array to the store to trigger reactivity.
+     */
+    async writeFeedContent(fn: (items: RssFeedContent[]) => RssFeedContent[] | void, delay = 0): Promise<void> {
         try {
-            const items = this.settings.items || [];
-            mutator(items);
-            await itemsStore.update(() => items);
-            
-            if (this.feedContentSaveTimer) window.clearTimeout(this.feedContentSaveTimer);
-            
-            // Debounce the save operation
-            this.feedContentSaveTimer = window.setTimeout(async () => {
-                await this.writeSettings(() => ({ items }));
-                try { await this.saveSettings(); } catch (e) { console.warn('saveSettings failed after debounced write', e); }
-                
-                this.feedContentSaveTimer = undefined;
-            }, delay);
-
-        } catch (e) { 
-            console.warn('Debounced write failed', e); 
+            const base = this.settings.items ?? [];
+            // Deep-ish clone (clone feeds + items arrays) to avoid mutating settings directly unless fn returns new ref
+            const working = base.map(f => ({ ...f, items: Array.isArray(f.items) ? [...f.items] : [] }));
+            const result = fn(working);
+            const updated = Array.isArray(result) ? result : working;
+            itemsStore.set(updated.map(f => ({ ...f, items: [...f.items] })));
+            this.settings.items = updated; // Keep settings in sync in memory
+            if (delay > 0) {
+                if (this.feedContentSaveTimer) window.clearTimeout(this.feedContentSaveTimer);
+                this.feedContentSaveTimer = window.setTimeout(() => {
+                    this.writeSettings(() => ({ items: updated }));
+                    this.saveSettings().catch(e => console.warn('saveSettings failed after debounced write', e));
+                    this.feedContentSaveTimer = undefined;
+                }, delay);
+            } else {
+                await this.writeSettings(() => ({ items: updated }));
+                await this.saveSettings();
+            }
+        } catch (e) {
+            console.warn('writeFeedContent failed', e);
         }
     }
-    
-    // Keep only one writeFeeds method
-    async writeFeeds(changeOpts: (feeds: RssFeed[]) => Partial<RssFeed[]>): Promise<void> {
-        await feedsStore.update((old) => ({...old, ...changeOpts(old)}));
-        await this.writeSettings((old) => ({
-            feeds: changeOpts(old.feeds)
-        }) );
 
+    async writeSettings(changeOpts: (settings: RssReaderSettings) => Partial<RssReaderSettings>): Promise<void> {
+        await settingsStore.update((old) => ({ ...old, ...changeOpts({ ...old }) }));
+    }
+
+    // Keep only one writeFeeds method
+    async writeFeeds(fn: (feeds: RssFeed[]) => RssFeed[]): Promise<void> {
+        let newFeeds: RssFeed[] = [];
+        feedsStore.update(old => newFeeds = fn(Array.isArray(old) ? [...old] : []));
+        this.settings.feeds = newFeeds;
+        await this.writeSettings(() => ({ feeds: newFeeds }));
         await this.updateFeeds();
     }
 
     // Keep only one writeFiltered method
-    async writeFiltered(changeOpts: (folders: FilteredFolder[]) => Partial<FilteredFolder[]>): Promise<void> {
-        await filteredStore.update((old) => ({...old, ...changeOpts(old)}));
-        await this.writeSettings((old) => ({
-            filtered: changeOpts(old.filtered)
-        }) );
-        
+    async writeFiltered(fn: (folders: FilteredFolder[]) => FilteredFolder[]): Promise<void> {
+        let newFiltered: FilteredFolder[] = [];
+        filteredStore.update(old => newFiltered = fn(Array.isArray(old) ? [...old] : []));
+        this.settings.filtered = newFiltered as any;
+        await this.writeSettings(() => ({ filtered: newFiltered }));
         await this.updateFeeds();
     }
 
@@ -366,15 +368,6 @@ export default class RssReaderPlugin extends Plugin {
         await this.writeSettings(() => ({
             folded: folded
         }));
-    }
-
-    // Internal write helper for services
-    async writeSettingsInternal(mut: (s: RssReaderSettings) => Partial<RssReaderSettings>): Promise<void> {
-        await this.writeSettings(old => ({...mut(old)}));
-    }
-
-    async writeSettings(changeOpts: (settings: RssReaderSettings) => Partial<RssReaderSettings>): Promise<void> {
-        await settingsStore.update((old) => ({...old, ...changeOpts(old)}));
     }
 
     private initCommands(): void {
